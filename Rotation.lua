@@ -292,25 +292,28 @@ function Warrior.Rotation()
                 for _,Unit in ipairs(Enemy5Y) do
                    for i = 1, #Player.OverpowerUnit do
                         if Unit.GUID == Player.OverpowerUnit[i].overpowerUnit then
-                            smartCast("Overpower", Unit, true)
+                            if smartCast("Overpower", Unit, true) then
+                                return true
+                            end
                         end
                     end 
                 end
                 return true
             end
-            if Setting("AutoExecute360") and Stance ~= "Defense" then
+            if Setting("AutoExecute360") then
                 for _,Unit in ipairs(Enemy5Y) do
-                    if Unit.HP < 20 and Spell.Execute:IsReady() then
-                        if Spell.Execute:Cast(Unit) then 
+                    if Unit.HP < 20 then
+                        if smartCast("Execute", Unit, true) then
                             return true
                         end
-                        return true
                     end
                 end
             end
 
-            if Setting("Whirlwind") then
-                smartCast("Whirlwind", Target, true)
+            if Setting("Whirlwind") and Spell.Whirlwind:CD() <= 2 then
+                if smartCast("Whirlwind", Target, true) then 
+                    return true
+                end
             end 
 ------------------------------------------------------------------------- 3+ targets------------------------------------------------------------------------- 3+ targets------------------------------------------------------------------------- 3+ targets
             if Enemy5YC >= 3 then
