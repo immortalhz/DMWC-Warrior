@@ -2,7 +2,7 @@ local DMW = DMW
 local Warrior = DMW.Rotations.WARRIOR
 local Rotation = DMW.Helpers.Rotation
 local Setting = DMW.Helpers.Rotation.Setting
-local Player, Buff, Debuff, Spell, Stance, Target, Talent, Item, GCD, CDs, HUD, Enemy5Y, Enemy5YC, Enemy14Y,Enemy14YC, rageDanceCheck
+local Player, Buff, Debuff, Spell, Stance, Target, Talent, Item, GCD, CDs, HUD, Enemy5Y, Enemy5YC, Enemy14Y,Enemy14YC, Enemy10Y, Enemy10YC, rageDanceCheck
 
 local function Locals()
     Player = DMW.Player
@@ -15,6 +15,7 @@ local function Locals()
     HUD = DMW.Settings.profile.HUD
     CDs = Player:CDs()
     Enemy5Y, Enemy5YC = Player:GetEnemies(1)
+    Enemy10Y, Enemy10YC = Player:GetEnemies(10)
     Enemy14Y, Enemy14YC = Player:GetEnemies(14)
 
     if select(2,GetShapeshiftFormInfo(1)) then
@@ -66,19 +67,17 @@ local stanceCheckBers = {
     ["Execute"] = true
 }
 
--- local function stanceDanceCast(spell, Unit, stance)
---     if rageDanceCheck then
---         if stance == 1 then
---             if Spell.StanceBattle:Cast() then end
---         elseif stance == 2 then
---             if Spell.StanceDefense:Cast() then end
---         elseif stance == 3 then
---             if Spell.StanceBers:Cast() then end
---         end
---     else
---         return end
---     end
--- end
+local function stanceDanceCast(spell, Unit, stance)
+    if rageDanceCheck then
+        if stance == 1 then
+            if Spell.StanceBattle:Cast() then end
+        elseif stance == 2 then
+            if Spell.StanceDefense:Cast() then end
+        elseif stance == 3 then
+            if Spell.StanceBers:Cast() then end
+        end
+    end
+end
 local function tagger()
     if Setting("Tagger") then
         for _,Unit in ipairs(Enemy14Y) do
@@ -100,46 +99,47 @@ local function questTagger()
     end
 end
 
-local function smartCast(spell, Unit)
-    if stanceCheckBattle[spell] then
-        if Stance == "Battle" then
-            if Spell[spell]:Cast(Unit) then
-                return true
-            end
-        else
-            stanceDanceCast(spell, Unit, 1)
-        end
-    elseif stanceCheckDefence[spell] then
-        if Stance == "Defense" then
-            if Spell[spell]:Cast(Unit) then
-                return true
-            end
-        else
-            stanceDanceCast(spell, Unit, 2)
-        end
-    elseif stanceCheckBers[spell] then
-        if Stance == "Bers" then
-            if Spell[spell]:Cast(Unit) then
-                return true
-            end
-        else
-            stanceDanceCast(spell, Unit,3)
-        end
-    else
-        if Spell[spell]:Cast(Unit) then
-            return true
-        end
+local function smartCast(spell, Unit, pool)
+    if pool and Spell[spell]:Cost() > Player.Power then
+        return true
     end
+        if stanceCheckBattle[spell] then
+            if Stance == "Battle" then
+                if Spell[spell]:Cast(Unit) then
+                    return true
+                end
+            else
+                stanceDanceCast(spell, Unit, 1)
+            end
+        elseif stanceCheckDefence[spell] then
+            if Stance == "Defense" then
+                if Spell[spell]:Cast(Unit) then
+                    return true
+                end
+            else
+                stanceDanceCast(spell, Unit, 2)
+            end
+        elseif stanceCheckBers[spell] then
+            if Stance == "Bers" then
+                if Spell[spell]:Cast(Unit) then
+                    return true
+                end
+            else
+                stanceDanceCast(spell, Unit,3)
+            end
+        else
+            if Spell[spell]:Cast(Unit) then
+                return true
+            end
+        end
 end
 
 function Warrior.Rotation()
-    
     Locals()
     tagger()
     questTagger()
     -- smartCast("Overpower")
     -- print(Player.SwingLeft)
-    -- print(#TrackUnits)
     -- print(overpowerCheck)
     if Player.Instance == "party" then
         Player:AutoTarget(5, true)
@@ -248,7 +248,7 @@ function Warrior.Rotation()
                 end
                 if Setting("Rend") and Stance ~= "Bers" and Spell.Rend:IsReady() then
                     for _,Unit in ipairs(Enemy5Y) do
-                        if not Debuff.Rend:Exist(Unit) and Spell.Rend:Cast(Unit) and Unit.TTD >= 10 then
+                        if not Debuff.Rend:Exist(Unit) and Unit.TTD >= 10 and Spell.Rend:Cast(Unit) then
                             return true
                         end
                     end
@@ -281,16 +281,20 @@ function Warrior.Rotation()
             --     RunMacroText("/follow")
             -- end
         end
+
+-------------------------------------------------------------------------------------------------- soemthing lookalike elite rotation ---------------------------------------------------------------------------
     elseif Setting("Rotation") == 3 then
         if Player.Combat then
-            if not IsCurrentSpell(Spell.Attack.SpellID) then
+            if Target and Target.ValidEnemy and not IsCurrentSpell(Spell.Attack.SpellID) then
                 StartAttack()
             end
-            if Setting("Overpower") and Player.overpowerTime ~= false and Spell.Overpower:IsReady() then
+            if Setting("Overpower") and #Player.OverpowerUnit > 0 then
                 for _,Unit in ipairs(Enemy5Y) do
-                    if Unit.GUID == Player.overpowerUnit and Spell.Overpower:Cast(Unit) then
-                        return true
-                    end
+                   for i = 1, #Player.OverpowerUnit do
+                        if Unit.GUID == Player.OverpowerUnit[i].overpowerUnit then
+                            smartCast("Overpower", Unit, true)
+                        end
+                    end 
                 end
                 return true
             end
@@ -304,6 +308,10 @@ function Warrior.Rotation()
                     end
                 end
             end
+
+            if Setting("Whirlwind") then
+                smartCast("Whirlwind", Target, true)
+            end 
 ------------------------------------------------------------------------- 3+ targets------------------------------------------------------------------------- 3+ targets------------------------------------------------------------------------- 3+ targets
             if Enemy5YC >= 3 then
                 if Setting("SweepingStrikes") and Stance == "Battle" then
@@ -317,7 +325,7 @@ function Warrior.Rotation()
 
                 if Setting("Rend") and Stance ~= "Bers" and Spell.Rend:IsReady() then
                     for _,Unit in ipairs(Enemy5Y) do
-                        if not Debuff.Rend:Exist(Unit) and Spell.Rend:Cast(Unit) and Unit.TTD >= 15 then
+                        if not Debuff.Rend:Exist(Unit) and Unit.CreatureType ~= "Elemental" and Unit.TTD >= 15 and Spell.Rend:Cast(Unit) then
                             return true
                         end
                     end
@@ -349,7 +357,7 @@ function Warrior.Rotation()
                 end
                 if Setting("Rend") and Stance ~= "Bers" and Spell.Rend:IsReady() then
                     for _,Unit in ipairs(Enemy5Y) do
-                        if not Debuff.Rend:Exist(Unit) and Spell.Rend:Cast(Unit) and Unit.TTD >= 15 then
+                        if not Debuff.Rend:Exist(Unit) and Unit.TTD >= 15 and Unit.CreatureType ~= "Elemental" and Spell.Rend:Cast(Unit) then
                             return true
                         end
                     end
@@ -362,18 +370,19 @@ function Warrior.Rotation()
 ------------------------------------------------------------------------- 1 targets------------------------------------------------------------------------ 1 targets------------------------------------------------------------------------ 1 targets
 
             elseif Target and Target.ValidEnemy and Enemy5YC == 1 then 
-
+                -- if Debuff.Rend:Refresh(Target) then
+                --     print(Debuff.Rend:Remain(Target))
+                -- end
                 if Target.HP >= 50 then 
                     
-                    
-                    if Setting("Rend") and not Debuff.Rend:Exist(Target) and Spell.Rend:Cast(Target) and Target.TTD >= 10 then
-                        return true
+                    if Setting("Rend") and not Debuff.Rend:Exist(Target) and Target.CreatureType ~= "Elemental" and Target.TTD >= 10 then
+                        smartCast("Rend", Target, true)
                     end
-                    if Setting("SunderArmor") and Spell.SunderArmor:Cast(Target) then
+                    if Setting("SunderArmor") and (Debuff.SunderArmor:Stacks(Target) < 5 or Debuff.Hamstring:Refresh(Target)) and Spell.SunderArmor:Cast(Target) then
                         return true
                     end
                 else
-                    if Setting("Hamstring Dump") and Spell.Hamstring:Cast(Target) then
+                    if Setting("Hamstring Dump") and Player.Power > Setting("Rage Dump") and Spell.Hamstring:Cast(Target) then
                         return true
                     end
                 end
