@@ -2,37 +2,7 @@ local DMW = DMW
 local Warrior = DMW.Rotations.WARRIOR
 local Rotation = DMW.Helpers.Rotation
 local Setting = DMW.Helpers.Rotation.Setting
-local Player, Buff, Debuff, Spell, Stance, Target, Talent, Item, GCD, CDs, HUD, Enemy5Y, Enemy5YC, Enemy14Y,Enemy14YC, Enemy10Y, Enemy10YC, rageDanceCheck
-
-local function Locals()
-    Player = DMW.Player
-    Buff = Player.Buffs
-    Debuff = Player.Debuffs
-    Spell = Player.Spells
-    Talent = Player.Talents
-    Item = Player.Items
-    Target = Player.Target or false
-    HUD = DMW.Settings.profile.HUD
-    CDs = Player:CDs()
-    Enemy5Y, Enemy5YC = Player:GetEnemies(1)
-    Enemy10Y, Enemy10YC = Player:GetEnemies(10)
-    Enemy14Y, Enemy14YC = Player:GetEnemies(14)
-
-    if select(2,GetShapeshiftFormInfo(1)) then
-        Stance = "Battle"
-    elseif select(2,GetShapeshiftFormInfo(2)) then
-        Stance = "Defense"
-    else
-        Stance = "Bers"
-    end
-    if Talent.TacticalMastery.Rank * 5 >= Player.Power then
-        rageDanceCheck = true
-    else
-        rageDanceCheck = false
-    end
-
-
-end
+local Player, Buff, Debuff, Spell, Stance, Target, Talent, Item, GCD, CDs, HUD, Enemy5Y, Enemy5YC, Enemy14Y,Enemy14YC, Enemy8Y, Enemy8YC, rageLost, dumpEnabled
 
 local stanceCheckBattle = {
     ["Overpower"] = true,
@@ -67,8 +37,60 @@ local stanceCheckBers = {
     ["Execute"] = true
 }
 
+local function Locals()
+    Player = DMW.Player
+    Buff = Player.Buffs
+    Debuff = Player.Debuffs
+    Spell = Player.Spells
+    Talent = Player.Talents
+    Item = Player.Items
+    Target = Player.Target or false
+    HUD = DMW.Settings.profile.HUD
+    CDs = Player:CDs()
+    Enemy5Y, Enemy5YC = Player:GetEnemies(1)
+    Enemy8Y, Enemy8YC = Player:GetEnemies(8)
+    Enemy14Y, Enemy14YC = Player:GetEnemies(14)
+
+    if select(2,GetShapeshiftFormInfo(1)) then
+        Stance = "Battle"
+    elseif select(2,GetShapeshiftFormInfo(2)) then
+        Stance = "Defense"
+    else
+        Stance = "Bers"
+    end
+    
+    rageLost = (Talent.TacticalMastery.Rank > 0 and Talent.TacticalMastery.Rank*5) or Player.Power
+    dumpEnabled = false
+
+end
+
+local function cancelAAmod()
+    if IsCurrentSpell(Spell.Cleave.SpellID) or IsCurrentSpell(Spell.HeroicStrike.SpellID) then
+        SpellStopCasting()
+    end
+end 
+local function dumpStart()
+    return Player.Power >= Setting("Rage Dump") or dumpEnabled
+end
+
+local function dumpRage(value)
+    if value >= 30 then
+        if Spell.MortalStrike:Cast(Target) then return true end
+    elseif value >= 20 then
+            if Enemy5YC >= 2 then
+                if Spell.ThunderClap:Cast(Target) then return true end
+                if smartcast("cleavehs") then end
+            end
+            if Spell.Slam:Cast(Target) then return true end
+
+    elseif value >= 15 then
+        if Spell.Slam:Cast(Target) then return true end
+    elseif value >= 10 then
+        if Spell.Hamstring:Cast(Target) then return true end
+    end
+end
 local function stanceDanceCast(spell, Unit, stance)
-    if rageDanceCheck then
+    if rageLost <= Setting("Rage Lost on stance change") then
         if stance == 1 then
             if Spell.StanceBattle:Cast() then end
         elseif stance == 2 then
@@ -76,8 +98,17 @@ local function stanceDanceCast(spell, Unit, stance)
         elseif stance == 3 then
             if Spell.StanceBers:Cast() then end
         end
+    else
+        if ((spell == "SweepStrikes" or spell == "Overpower") and Stance ~= "Battle") or
+           ((spell == "Whirlwind") and Stance ~= "Bers") or
+           ((spell == "Taunt") and Stance ~= "Defense") then
+                dumpEnabled = true
+                dumpRage(Player.Power-(Talent.TacticalMastery.Rank * 5))
+        end
     end
 end
+
+
 local function tagger()
     if Setting("Tagger") then
         for _,Unit in ipairs(Enemy14Y) do
@@ -93,13 +124,40 @@ end
 
 local function questTagger()
     if Setting("questTagger") then
-        for k,v in ipairs(DMW.Units) do
-            print(v)
-        end
+        -- for k,v in ipairs(DMW.Units) do
+        --     print(v)
+        -- end
+        Player:AutoTargetQuest(25)
     end
 end
 
+local function dpsAA()
+    local minDamage, maxDamage, minOffHandDamage, maxOffHandDamage = UnitDamage("player")
+    local speed, offhandSpeed = UnitAttackSpeed("player")
+    local apGain = UnitAttackPower("player") / 14
+    return ((maxDamage + minDamage)/2/speed) + apGain
+end
+local function timeToCost(value)
+    -- return Spell[spell].Cost()
+    local deficit = value <= Player.Power and 0 or (value - Player.Power)
+    local damageForOneRage = Player.Level * 0.5 -- = 1 rage
+    local realGain = dpsAA() / damageForOneRage
+    return math.floor(deficit,realGain)
+    -- every UnitAttackSpeed("player") u get 1
+end
+
 local function smartCast(spell, Unit, pool)
+    if spell == "cleavehs" then 
+        if Enemy5YC >= 2 then
+            if Spell.Cleave:IsReady() and Spell.Cleave:Cast() then
+                return true
+            end
+        else
+            if Spell.HeroicStrike:IsReady() and Spell.HeroicStrike:Cast() then
+                return true
+            end
+        end 
+    end
     if pool and Spell[spell]:Cost() > Player.Power then
         return true
     end
@@ -138,22 +196,32 @@ function Warrior.Rotation()
     Locals()
     tagger()
     questTagger()
+    -- print(Setting("Rage Lost on stance change"))
+    -- print(Spell.Whirlwind:CD())
     -- smartCast("Overpower")
     -- print(Player.SwingLeft)
     -- print(overpowerCheck)
     if Player.Instance == "party" then
-        Player:AutoTarget(5, true)
+        if not Target or not Target.ValidEnemy then
+            Player:AutoTarget(5, true)
+        end
     end
     if Setting("Stop If Shift") and GetKeyState(0x10) then
         return true
     end
-    if Setting("Charge") and Target and Target.ValidEnemy then
-        if Spell.Charge:Cast(Target) then
+    if Setting("Charge") and Target and Target.ValidEnemy and not UnitIsTapDenied(Target.Pointer) then
+        if smartCast("Charge", Target) then
             return true
         end
+        if Spell.Intercept:IsReady() and smartCast("Intercept", Target) then
+            return true
+        end
+        StartAttack()
     end
-    if Setting("BattleShout") and not Buff.BattleShout:Exist(Player) and Spell.BattleShout:Cast(Player) then
-        return true
+    if Setting("BattleShout") and not Buff.BattleShout:Exist(Player) then
+        if Spell.BattleShout:Cast(Player) then
+            return true
+        end
     end
     --/dump UnitAttackSpeed("target")
     if Setting("Rotation") == 2 then
@@ -164,7 +232,6 @@ function Warrior.Rotation()
 
             if Setting("AutoFaceMelee") then
                 if Player.SwingLeft == 0 then
-
                     if DMW.Time > Player.SwingNext and DMW.Time > swingTime and IsCurrentSpell(6603) then
                         for _,Unit in ipairs(Enemy5Y) do
                             local Facing = ObjectFacing("player")
@@ -179,7 +246,6 @@ function Warrior.Rotation()
                                 MouselookStart()
                             end
                             swingTime = DMW.Time + 0.1
-                            
                         end
                     end
                 end
@@ -258,7 +324,7 @@ function Warrior.Rotation()
                 -- end
             end
             -- DUMP
-            if Player.Power >= Setting("Rage Dump") and Player.SwingLeft <= 0.2 then
+            if dumpStart() and Player.SwingLeft <= 0.2 then
                 if not IsCurrentSpell(845) and not IsCurrentSpell(285) then
                     if Enemy5YC >= 2 and not Buff.SweepStrikes:Exist("player") then
                         if Spell.Cleave:IsReady() and Spell.Cleave:Cast() then
@@ -298,98 +364,117 @@ function Warrior.Rotation()
                         end
                     end 
                 end
-                return true
             end
             if Setting("AutoExecute360") then
                 for _,Unit in ipairs(Enemy5Y) do
                     if Unit.HP < 20 then
-                        if smartCast("Execute", Unit, true) then
+                        local oldTarget = Target and Target.Pointer or false
+                        TargetUnit(Unit.Pointer)
+                        if smartCast("Execute", Target, true) then
+                            if oldTarget ~= false then
+                                TargetUnit(oldTarget)
+                            end
                             return true
                         end
                     end
                 end
             end
-
-            if Setting("Whirlwind") and Spell.Whirlwind:CD() <= 2 then
-                if smartCast("Whirlwind", Target, true) then 
-                    return true
-                end
-            end 
 ------------------------------------------------------------------------- 3+ targets------------------------------------------------------------------------- 3+ targets------------------------------------------------------------------------- 3+ targets
             if Enemy5YC >= 3 then
-                if Setting("SweepingStrikes") and Stance == "Battle" then
-                    if Spell.SweepStrikes:Cast(Player) then
-                        return true
+                cancelAAmod()
+                if Setting("SweepingStrikes") and Enemy8YC >= 2 and Spell.SweepStrikes:CD() <= 2 then
+                    if IsCurrentSpell(Spell.Cleave.SpellID) or IsCurrentSpell(Spell.HeroicStrike.SpellID) then
+                        RunMacroText("/stopcasting")
                     end
-                    if Player.Power < 30 and Spell.SweepStrikes:CD() == 0 then
-                        return true
-                    end
-                end
-
-                if Setting("Rend") and Stance ~= "Bers" and Spell.Rend:IsReady() then
-                    for _,Unit in ipairs(Enemy5Y) do
-                        if not Debuff.Rend:Exist(Unit) and Unit.CreatureType ~= "Elemental" and Unit.TTD >= 15 and Spell.Rend:Cast(Unit) then
-                            return true
-                        end
-                    end
-                end
-
-                if Setting("ThunderClap") and Stance == "Battle" then
-                    if Spell.ThunderClap:Cast() then 
-                        return true
-                    end
-                    if Player.Power < 20 and Spell.ThunderClap:CD() == 0 then
+                    if smartCast("SweepStrikes", Player, true) then
                         return true
                     end
                 end
 
-                if not IsCurrentSpell(Spell.Cleave.SpellID) then
-                    if Spell.Cleave:IsReady() and Spell.Cleave:Cast() then
+                if Setting("Whirlwind") and Spell.Whirlwind:CD() <= 3 and Enemy8YC > 0 then
+                    if smartCast("Whirlwind", Player, true) then 
                         return true
                     end
                 end
+
+                if Setting("MortalStrike") and Spell.Whirlwind:CD() <= 2 and Enemy5YC > 0 then
+                    if smartCast("MortalStrike", Target, true) then 
+                        return true
+                    end
+                end 
 ------------------------------------------------------------------------- 2 targets------------------------------------------------------------------------ 2 targets------------------------------------------------------------------------ 2 targets
             elseif Enemy5YC == 2 then
-                if Setting("SweepingStrikes") and Stance == "Battle" then
-                    if Spell.SweepStrikes:Cast() then
-                        return true
+                cancelAAmod()
+                if Setting("SweepingStrikes") and Enemy8YC >= 2 and Spell.SweepStrikes:CD() <= 2 then
+                    if IsCurrentSpell(Spell.Cleave.SpellID) or IsCurrentSpell(Spell.HeroicStrike.SpellID) then
+                        RunMacroText("/stopcasting")
                     end
-                    if Player.Power < 30 and Spell.SweepStrikes:CD() == 0 then
+                    if smartCast("SweepStrikes", Player, true) then
                         return true
                     end
                 end
-                if Setting("Rend") and Stance ~= "Bers" and Spell.Rend:IsReady() then
-                    for _,Unit in ipairs(Enemy5Y) do
-                        if not Debuff.Rend:Exist(Unit) and Unit.TTD >= 15 and Unit.CreatureType ~= "Elemental" and Spell.Rend:Cast(Unit) then
-                            return true
-                        end
+
+                if Setting("Whirlwind") and Spell.Whirlwind:CD() <= 3 and Enemy8YC > 0 then
+                    if smartCast("Whirlwind", Player, true) then 
+                        return true
                     end
                 end
-                if not IsCurrentSpell(Spell.Cleave.SpellID) then
+
+                if Setting("MortalStrike") and Spell.Whirlwind:CD() <= 2 and Enemy5YC > 0 then
+                    if smartCast("MortalStrike", Target, true) then 
+                        return true
+                    end
+                end 
+                if not IsCurrentSpell(Spell.Cleave.SpellID) and dumpStart() then
                     if Spell.Cleave:IsReady() and Spell.Cleave:Cast() then
                         return true
                     end
                 end
 ------------------------------------------------------------------------- 1 targets------------------------------------------------------------------------ 1 targets------------------------------------------------------------------------ 1 targets
-
-            elseif Target and Target.ValidEnemy and Enemy5YC == 1 then 
+            elseif Target and Target.ValidEnemy and Enemy5YC == 1 then
+                cancelAAmod() 
                 -- if Debuff.Rend:Refresh(Target) then
                 --     print(Debuff.Rend:Remain(Target))
                 -- end
-                if Target.HP >= 50 then 
-                    
-                    if Setting("Rend") and not Debuff.Rend:Exist(Target) and Target.CreatureType ~= "Elemental" and Target.TTD >= 10 then
-                        smartCast("Rend", Target, true)
-                    end
-                    if Setting("SunderArmor") and (Debuff.SunderArmor:Stacks(Target) < 5 or Debuff.Hamstring:Refresh(Target)) and Spell.SunderArmor:Cast(Target) then
-                        return true
-                    end
-                else
-                    if Setting("Hamstring Dump") and Player.Power > Setting("Rage Dump") and Spell.Hamstring:Cast(Target) then
+                
+                if Setting("Rend") and not Debuff.Rend:Exist(Target) and Target.CreatureType ~= "Elemental" and Target.TTD >= 10 then
+                    smartCast("Rend", Target, true)
+                end
+                if Setting("SunderArmor") and (Debuff.SunderArmor:Stacks(Target) < 5 or Debuff.SunderArmor:Refresh(Target)) and Spell.SunderArmor:Cast(Target) then
+                    return true
+                end
+                if smartCast("MortalStrike", Target, true) then
+                    return true
+                end
+                if smartCast("Whirlwind", Target, true) then
+                    return true
+                end
+                if not IsCurrentSpell(Spell.HeroicStrike.SpellID) and dumpEnabled then
+                    if Spell.HeroicStrike:IsReady() and Spell.HeroicStrike:Cast() then
                         return true
                     end
                 end
-            end 
-        end
-    end
+            end  --enemies
+
+            if (Player.Power - rageLost) >= Setting("Rage Lost on stance change") then
+                local dumpRageValue = (Player.Power - rageLost)
+                
+                if Enemy5YC >= 2 then
+                    if not IsCurrentSpell(Spell.Cleave.SpellID) then
+                        if Spell.Cleave:Cast() then end
+                    end
+                else
+                    if not IsCurrentSpell(Spell.HeroicStrike.SpellID) then
+                        if Spell.HeroicStrike:Cast() then end
+                    end
+                end
+
+                if IsCurrentSpell(Spell.Cleave.SpellID) then dumpRageValue = dumpRageValue - 20 end
+                if IsCurrentSpell(Spell.HeroicStrike.SpellID) then dumpRageValue = dumpRageValue - 15 end
+            end   
+        end--combat
+    elseif Setting("Rotation") == 1 then
+        Spell.Slam:Cast(Target)
+        if smartCast("Whirlwind", Player) then return true end
+    end--rotation setting
 end
