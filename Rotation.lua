@@ -2,7 +2,7 @@ local DMW = DMW
 local Warrior = DMW.Rotations.WARRIOR
 local Rotation = DMW.Helpers.Rotation
 local Setting = DMW.Helpers.Rotation.Setting
-local Player, Buff, Debuff, Spell, Stance, Target, Talent, Item, GCD, CDs, HUD, Enemy5Y, Enemy5YC, Enemy14Y,Enemy14YC, Enemy8Y, Enemy8YC, rageLost, dumpEnabled
+local Player, Buff, Debuff, Spell, Stance, Target, Talent, Item, GCD, CDs, HUD, Enemy5Y, Enemy5YC, Enemy14Y,Enemy14YC, Enemy8Y, Enemy8YC, rageLost, dumpEnabled, castTime
 
 local stanceCheckBattle = {
     ["Overpower"] = true,
@@ -58,7 +58,7 @@ local function Locals()
     else
         Stance = "Bers"
     end
-    
+    if castTime == nil then castTime = DMW.Time end
     rageLost = (Talent.TacticalMastery.Rank > 0 and Talent.TacticalMastery.Rank*5) or Player.Power
     dumpEnabled = false
 
@@ -79,7 +79,7 @@ local function dumpRage(value)
     elseif value >= 20 then
             if Enemy5YC >= 2 then
                 if Spell.ThunderClap:Cast(Target) then return true end
-                if smartcast("cleavehs") then end
+                if smartCast("cleavehs") then end
             end
             if Spell.Slam:Cast(Target) then return true end
 
@@ -89,21 +89,21 @@ local function dumpRage(value)
         if Spell.Hamstring:Cast(Target) then return true end
     end
 end
-local function stanceDanceCast(spell, Unit, stance)
+local function stanceDanceCast(spell, dest, stance)
     if rageLost <= Setting("Rage Lost on stance change") then
+        print("spell = "..tostring(spell).." , Unit = ".. tostring(dest) .. " , stance = "..tostring(stance))
         if stance == 1 then
-            if Spell.StanceBattle:Cast() then end
+            if Spell.StanceBattle:Cast() then
+                if Spell[spell]:Cast(dest) then return true end
+            end
         elseif stance == 2 then
-            if Spell.StanceDefense:Cast() then end
+            if Spell.StanceDefense:Cast() then
+                if Spell[spell]:Cast(dest) then return true end
+            end
         elseif stance == 3 then
-            if Spell.StanceBers:Cast() then end
-        end
-    else
-        if ((spell == "SweepStrikes" or spell == "Overpower") and Stance ~= "Battle") or
-           ((spell == "Whirlwind") and Stance ~= "Bers") or
-           ((spell == "Taunt") and Stance ~= "Defense") then
-                dumpEnabled = true
-                dumpRage(Player.Power-(Talent.TacticalMastery.Rank * 5))
+            if Spell.StanceBers:Cast() then
+                if Spell[spell]:Cast(dest) then return true end
+            end
         end
     end
 end
@@ -147,55 +147,71 @@ local function timeToCost(value)
 end
 
 local function smartCast(spell, Unit, pool)
-    if spell == "cleavehs" then 
-        if Enemy5YC >= 2 then
-            if Spell.Cleave:IsReady() and Spell.Cleave:Cast() then
-                return true
-            end
-        else
-            if Spell.HeroicStrike:IsReady() and Spell.HeroicStrike:Cast() then
-                return true
-            end
-        end 
-    end
+    -- if spell == "cleavehs" then 
+    --     if Enemy5YC >= 2 then
+    --         if Spell.Cleave:IsReady() and Spell.Cleave:Cast() then
+    --             return true
+    --         end
+    --     else
+    --         if Spell.HeroicStrike:IsReady() and Spell.HeroicStrike:Cast() then
+    --             return true
+    --         end
+    --     end 
+    -- end
     if pool and Spell[spell]:Cost() > Player.Power then
+        if spell == "SweepStrikes" and Stance ~= "Battle" then
+            Spell.StanceBattle:Cast()
+        end
         return true
-    end
-        if stanceCheckBattle[spell] then
-            if Stance == "Battle" then
-                if Spell[spell]:Cast(Unit) then
-                    return true
+    else
+        castTime = DMW.Time
+        if Stance == "Battle" then
+            if not stanceCheckBattle[spell] then
+                if stanceCheckDefence[spell] then
+                    if stanceDanceCast(spell, Unit, 2) then return true end
+                elseif stanceCheckBers[spell] then
+                    if stanceDanceCast(spell, Unit, 3) then return true end
+                else
+                    if Spell[spell]:Cast(Unit) then return true end
                 end
             else
-                stanceDanceCast(spell, Unit, 1)
+                if Spell[spell]:Cast(Unit) then return true end
             end
-        elseif stanceCheckDefence[spell] then
-            if Stance == "Defense" then
-                if Spell[spell]:Cast(Unit) then
-                    return true
+        elseif Stance == "Defense" then
+            if not stanceCheckDefence[spell] then
+                if stanceCheckBattle[spell] then
+                    if stanceDanceCast(spell, Unit, 1) then return true end
+                elseif stanceCheckBers[spell] then
+                    if stanceDanceCast(spell, Unit, 3) then return true end
+                else
+                    if Spell[spell]:Cast(Unit) then return true end
                 end
             else
-                stanceDanceCast(spell, Unit, 2)
+                if Spell[spell]:Cast(Unit) then return true end
             end
-        elseif stanceCheckBers[spell] then
-            if Stance == "Bers" then
-                if Spell[spell]:Cast(Unit) then
-                    return true
+        elseif Stance == "Bers" then
+            if not stanceCheckBers[spell] then
+                if stanceCheckBattle[spell] then
+                    if stanceDanceCast(spell, Unit, 1) then return true end
+                elseif stanceCheckDefence[spell] then
+                    if stanceDanceCast(spell, Unit, 2)  then return true end
+                else
+                    if Spell[spell]:Cast(Unit) then return true end
                 end
             else
-                stanceDanceCast(spell, Unit,3)
-            end
-        else
-            if Spell[spell]:Cast(Unit) then
-                return true
+                if Spell[spell]:Cast(Unit) then return true end
             end
         end
+    end
 end
 
 function Warrior.Rotation()
     Locals()
     tagger()
     questTagger()
+
+    if DMW.Time <= castTime + 0.3 then return true end
+    if Stance == "Defense" then return true end
     -- print(Setting("Rage Lost on stance change"))
     -- print(Spell.Whirlwind:CD())
     -- smartCast("Overpower")
@@ -438,40 +454,40 @@ function Warrior.Rotation()
                 -- end
                 
                 if Setting("Rend") and not Debuff.Rend:Exist(Target) and Target.CreatureType ~= "Elemental" and Target.TTD >= 10 then
-                    smartCast("Rend", Target, true)
+                    if smartCast("Rend", Target, true) then return true end
                 end
                 if Setting("SunderArmor") and (Debuff.SunderArmor:Stacks(Target) < 5 or Debuff.SunderArmor:Refresh(Target)) and Spell.SunderArmor:Cast(Target) then
                     return true
                 end
-                if smartCast("MortalStrike", Target, true) then
+                if Spell.MortalStrike:CD() <= 3 and smartCast("MortalStrike", Target, true) then
                     return true
                 end
-                if smartCast("Whirlwind", Target, true) then
+                if Enemy8YC > 0 and smartCast("Whirlwind", Target, true) then
                     return true
                 end
-                if not IsCurrentSpell(Spell.HeroicStrike.SpellID) and dumpEnabled then
-                    if Spell.HeroicStrike:IsReady() and Spell.HeroicStrike:Cast() then
-                        return true
-                    end
-                end
+                -- if not IsCurrentSpell(Spell.HeroicStrike.SpellID) and dumpEnabled then
+                --     if Spell.HeroicStrike:IsReady() and Spell.HeroicStrike:Cast() then
+                --         return true
+                --     end
+                -- end
             end  --enemies
 
-            if (Player.Power - rageLost) >= Setting("Rage Lost on stance change") then
-                local dumpRageValue = (Player.Power - rageLost)
+            -- if (Player.Power - rageLost) >= Setting("Rage Lost on stance change") then
+            --     local dumpRageValue = (Player.Power - rageLost)
                 
-                if Enemy5YC >= 2 then
-                    if not IsCurrentSpell(Spell.Cleave.SpellID) then
-                        if Spell.Cleave:Cast() then end
-                    end
-                else
-                    if not IsCurrentSpell(Spell.HeroicStrike.SpellID) then
-                        if Spell.HeroicStrike:Cast() then end
-                    end
-                end
+            --     if Enemy5YC >= 2 and dumpRageValue >= 20 then
+            --         if not IsCurrentSpell(Spell.Cleave.SpellID) then
+            --             if Spell.Cleave:Cast() then end
+            --         end
+            --     else
+            --         if not IsCurrentSpell(Spell.HeroicStrike.SpellID) then
+            --             if Spell.HeroicStrike:Cast() then end
+            --         end
+            --     end
 
-                if IsCurrentSpell(Spell.Cleave.SpellID) then dumpRageValue = dumpRageValue - 20 end
-                if IsCurrentSpell(Spell.HeroicStrike.SpellID) then dumpRageValue = dumpRageValue - 15 end
-            end   
+            --     if IsCurrentSpell(Spell.Cleave.SpellID) then dumpRageValue = dumpRageValue - 20 end
+            --     if IsCurrentSpell(Spell.HeroicStrike.SpellID) then dumpRageValue = dumpRageValue - 15 end
+            -- end   
         end--combat
     elseif Setting("Rotation") == 1 then
         Spell.Slam:Cast(Target)
