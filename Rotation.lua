@@ -50,7 +50,6 @@ local function Locals()
     Enemy5Y, Enemy5YC = Player:GetEnemies(1)
     Enemy8Y, Enemy8YC = Player:GetEnemies(8)
     Enemy14Y, Enemy14YC = Player:GetEnemies(14)
-
     if select(2,GetShapeshiftFormInfo(1)) then
         Stance = "Battle"
     elseif select(2,GetShapeshiftFormInfo(2)) then
@@ -59,21 +58,23 @@ local function Locals()
         Stance = "Bers"
     end
     if castTime == nil then castTime = DMW.Time end
-    rageLost = (Talent.TacticalMastery.Rank > 0 and Talent.TacticalMastery.Rank*5) or Player.Power
+    rageLost = Player.Power - Talent.TacticalMastery.Rank*5
     dumpEnabled = false
-
+    if Buff.SweepStrikes:Exist(Player) and HUD.Sweeping == 1 then DMWHUDSWEEPING:Toggle(2) end
 end
 
 local function cancelAAmod()
     if IsCurrentSpell(Spell.Cleave.SpellID) or IsCurrentSpell(Spell.HeroicStrike.SpellID) then
         SpellStopCasting()
     end
-end 
+end
+
 local function dumpStart()
     return Player.Power >= Setting("Rage Dump") or dumpEnabled
 end
 
 local function dumpRage(value)
+    print(value)
     if value >= 30 then
         if Spell.MortalStrike:Cast(Target) then return true end
     elseif value >= 20 then
@@ -81,33 +82,29 @@ local function dumpRage(value)
                 if Spell.ThunderClap:Cast(Target) then return true end
                 if smartCast("cleavehs") then end
             end
-            if Spell.Slam:Cast(Target) then return true end
+            -- if Spell.Slam:Cast(Target) then return true end
 
-    elseif value >= 15 then
-        if Spell.Slam:Cast(Target) then return true end
+    -- elseif value >= 15 then
+    --     if Spell.Slam:Cast(Target) then return true end
     elseif value >= 10 then
         if Spell.Hamstring:Cast(Target) then return true end
     end
 end
+
 local function stanceDanceCast(spell, dest, stance)
     if rageLost <= Setting("Rage Lost on stance change") then
         print("spell = "..tostring(spell).." , Unit = ".. tostring(dest) .. " , stance = "..tostring(stance))
         if stance == 1 then
-            if Spell.StanceBattle:Cast() then
-                if Spell[spell]:Cast(dest) then return true end
-            end
+            if Spell.StanceBattle:Cast() then return true end
         elseif stance == 2 then
-            if Spell.StanceDefense:Cast() then
-                if Spell[spell]:Cast(dest) then return true end
-            end
+            if Spell.StanceDefense:Cast() then return true end
         elseif stance == 3 then
-            if Spell.StanceBers:Cast() then
-                if Spell[spell]:Cast(dest) then return true end
-            end
+            if Spell.StanceBers:Cast() then return true end
         end
+    else
+        dumpRage(rageLost)
     end
 end
-
 
 local function tagger()
     if Setting("Tagger") then
@@ -144,6 +141,15 @@ local function timeToCost(value)
     local realGain = dpsAA() / damageForOneRage
     return math.floor(deficit,realGain)
     -- every UnitAttackSpeed("player") u get 1
+end
+
+local function regularCast(spell, Unit, pool)
+    if pool and Spell[spell]:Cost() > Player.Power then
+        return true
+    end
+    if Spell[spell]:Cast(Unit) then
+        return true
+    end
 end
 
 local function smartCast(spell, Unit, pool)
@@ -209,7 +215,13 @@ function Warrior.Rotation()
     Locals()
     tagger()
     questTagger()
-
+    if ChannelInfo("player") then
+        print("bad code")
+    end
+    if select(8, ChannelInfo("player")) == 9632 then
+        print("123")
+        SpellStopCasting()
+    end
     if DMW.Time <= castTime + 0.3 then return true end
     if Stance == "Defense" then return true end
     -- print(Setting("Rage Lost on stance change"))
@@ -398,7 +410,7 @@ function Warrior.Rotation()
 ------------------------------------------------------------------------- 3+ targets------------------------------------------------------------------------- 3+ targets------------------------------------------------------------------------- 3+ targets
             if Enemy5YC >= 3 then
                 cancelAAmod()
-                if Setting("SweepingStrikes") and Enemy8YC >= 2 and Spell.SweepStrikes:CD() <= 2 then
+                if Setting("SweepingStrikes") and Enemy8YC >= 2 and Spell.SweepStrikes:CD() <= 2 and HUD.Sweeping == 1 then
                     if IsCurrentSpell(Spell.Cleave.SpellID) or IsCurrentSpell(Spell.HeroicStrike.SpellID) then
                         RunMacroText("/stopcasting")
                     end
@@ -421,7 +433,7 @@ function Warrior.Rotation()
 ------------------------------------------------------------------------- 2 targets------------------------------------------------------------------------ 2 targets------------------------------------------------------------------------ 2 targets
             elseif Enemy5YC == 2 then
                 cancelAAmod()
-                if Setting("SweepingStrikes") and Enemy8YC >= 2 and Spell.SweepStrikes:CD() <= 2 then
+                if Setting("SweepingStrikes") and Enemy8YC >= 2 and Spell.SweepStrikes:CD() <= 2 and HUD.Sweeping == 1 then
                     if IsCurrentSpell(Spell.Cleave.SpellID) or IsCurrentSpell(Spell.HeroicStrike.SpellID) then
                         RunMacroText("/stopcasting")
                     end
@@ -452,12 +464,13 @@ function Warrior.Rotation()
                 -- if Debuff.Rend:Refresh(Target) then
                 --     print(Debuff.Rend:Remain(Target))
                 -- end
-                
-                if Setting("Rend") and not Debuff.Rend:Exist(Target) and Target.CreatureType ~= "Elemental" and Target.TTD >= 10 then
-                    if smartCast("Rend", Target, true) then return true end
-                end
-                if Setting("SunderArmor") and (Debuff.SunderArmor:Stacks(Target) < 5 or Debuff.SunderArmor:Refresh(Target)) and Spell.SunderArmor:Cast(Target) then
-                    return true
+                if Target.HP >= 50 then
+                        if Setting("Rend") and not Debuff.Rend:Exist(Target) and Target.CreatureType ~= "Elemental" and Target.TTD >= 10 then
+                            if smartCast("Rend", Target, true) then return true end
+                        end
+                        if Setting("SunderArmor") and (Debuff.SunderArmor:Stacks(Target) < 5 or Debuff.SunderArmor:Refresh(Target)) and Spell.SunderArmor:Cast(Target) then
+                            return true
+                        end
                 end
                 if Spell.MortalStrike:CD() <= 3 and smartCast("MortalStrike", Target, true) then
                     return true

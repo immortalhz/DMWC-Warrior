@@ -6,10 +6,9 @@ local UI = DMW.UI
 function Warrior.Settings()
     UI.HUD.Options = {
         [1] = {
-            Test = {
+            Sweeping = {
                 [1] = {Text = "Sweeping Strikes |cFF00FF00On", Tooltip = ""},
-                [2] = {Text = "Sweeping Strikes |cFFFFFF00Sort Of On", Tooltip = ""},
-                [3] = {Text = "HUD Test |cffff0000Disabled", Tooltip = ""}
+                [2] = {Text = "Sweeping Strikes |cFFFFFF00Off", Tooltip = ""}
             }
         }
     }
