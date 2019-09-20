@@ -74,7 +74,7 @@ local function dumpStart()
 end
 
 local function dumpRage(value)
-    print(value)
+    -- print(value)
     if value >= 30 then
         if Spell.MortalStrike:Cast(Target) then return true end
     elseif value >= 20 then
@@ -211,29 +211,52 @@ local function smartCast(spell, Unit, pool)
     end
 end
 
+blizzardshit = true
+
 function Warrior.Rotation()
     Locals()
     tagger()
     questTagger()
-    if ChannelInfo("player") then
-        print("bad code")
-    end
-    if select(8, ChannelInfo("player")) == 9632 then
-        print("123")
-        SpellStopCasting()
-    end
+    -- print(ObjectDescriptor("target", GetOffset("CGUnitData__StateAnimKitID"), Types.Byte))
+    -- if ChannelInfo("player") then
+    --     print("bad code")
+    -- end
+
+    -- if Target then
+    --     print(Target.SwingMH)
+    -- end
+    -- if Target then print(Target.SwingMH) end
+    -- if Player.Standing then
+    --     blizzardshit = true
+    -- end
+    -- if Target and Target.ValidEnemy and Player.Combat and blizzardshit  then
+    --     if Target.SwingMH < Player.SwingMH and Target.SwingMH > 0.01 and Player.SwingMH > 0.01 then
+    --         print("sit")
+    --         RunMacroText("/sit")
+    --         blizzardshit = false
+    --         -- SitStandOrDescendStart()
+    --     end
+    -- end
+    -- if not Player.Standing() then
+    --     RunMacroText("/stand")
+    -- end
+    -- if select(8, ChannelInfo("player")) == 9632 then
+    --     print("123")
+    --     SpellStopCasting()
+    -- end
     if DMW.Time <= castTime + 0.3 then return true end
     if Stance == "Defense" then return true end
     -- print(Setting("Rage Lost on stance change"))
     -- print(Spell.Whirlwind:CD())
     -- smartCast("Overpower")
     -- print(Player.SwingLeft)
+    -- print(addon_data.player.main_swing_timer)
     -- print(overpowerCheck)
-    if Player.Instance == "party" then
-        if not Target or not Target.ValidEnemy then
-            Player:AutoTarget(5, true)
+    -- if Player.Instance == "party" then
+        if not Target or not Target.Facing or Target.Distance > 0 then
+            Player:AutoTargetAny(0, true)
         end
-    end
+    -- end
     if Setting("Stop If Shift") and GetKeyState(0x10) then
         return true
     end
@@ -254,6 +277,9 @@ function Warrior.Rotation()
     --/dump UnitAttackSpeed("target")
     if Setting("Rotation") == 2 then
         if Player.Combat and Enemy5YC > 0 then
+            if Target then
+                                StartAttack(Target.Pointer)
+                    end
             if Target and Target.ValidEnemy and not IsCurrentSpell(6603) then
                 StartAttack(Target.Pointer)
             end
@@ -287,8 +313,10 @@ function Warrior.Rotation()
                     end
                 end
             end
-            if Setting("BattleShout") and not Buff.BattleShout:Exist(Player) and Spell.BattleShout:Cast(Player) then
-                return true
+            if Setting("BattleShout") and not Buff.BattleShout:Exist(Player)  then
+                if Spell.BattleShout:Cast(Player) then
+                    return true
+                end
             end
             if Setting("DemoShout") > 0 then
                 
@@ -382,15 +410,17 @@ function Warrior.Rotation()
             if Target and Target.ValidEnemy and not IsCurrentSpell(Spell.Attack.SpellID) then
                 StartAttack()
             end
-            if Setting("Overpower") and #Player.OverpowerUnit > 0 then
+             if Setting("Pummel") and Target and Target:Interrupt() then
+                    smartCast("Pummel", Target, true)
+                end
+            -- print(#Player.OverpowerUnit)
+            if Setting("Overpower")  then
                 for _,Unit in ipairs(Enemy5Y) do
-                   for i = 1, #Player.OverpowerUnit do
-                        if Unit.GUID == Player.OverpowerUnit[i].overpowerUnit then
-                            if smartCast("Overpower", Unit, true) then
-                                return true
-                            end
+                    if Player.OverpowerUnit[Unit.Pointer] ~= nil then
+                        if smartCast("Overpower", Unit, true) then
+                            return true
                         end
-                    end 
+                    end
                 end
             end
             if Setting("AutoExecute360") then
@@ -464,10 +494,10 @@ function Warrior.Rotation()
                 -- if Debuff.Rend:Refresh(Target) then
                 --     print(Debuff.Rend:Remain(Target))
                 -- end
-                if Target.HP >= 50 then
-                        if Setting("Rend") and not Debuff.Rend:Exist(Target) and Target.CreatureType ~= "Elemental" and Target.TTD >= 10 then
-                            if smartCast("Rend", Target, true) then return true end
-                        end
+                if Target.HP >= 80 then
+                        -- if Setting("Rend") and not Debuff.Rend:Exist(Target) and Target.CreatureType ~= "Elemental" and Target.TTD >= 10 then
+                        --     if smartCast("Rend", Target, true) then return true end
+                        -- end
                         if Setting("SunderArmor") and (Debuff.SunderArmor:Stacks(Target) < 5 or Debuff.SunderArmor:Refresh(Target)) and Spell.SunderArmor:Cast(Target) then
                             return true
                         end

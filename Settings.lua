@@ -32,6 +32,8 @@ function Warrior.Settings()
     UI.AddToggle("SweepingStrikes", nil, true)
     UI.AddRange("DemoShout", "Will Dump Rage after ", 0, 10, 1, 1)
     UI.AddToggle("Overpower", nil, true)
+        UI.AddToggle("Pummel", nil, true)
+
     UI.AddToggle("Revenge", nil, true)
     UI.AddToggle("Rend", nil, true)
     UI.AddToggle("SunderArmor", nil, true)
