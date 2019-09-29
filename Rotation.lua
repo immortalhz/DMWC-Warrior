@@ -93,7 +93,7 @@ end
 
 local function stanceDanceCast(spell, dest, stance)
     if rageLost <= Setting("Rage Lost on stance change") then
-        print("spell = "..tostring(spell).." , Unit = ".. tostring(dest) .. " , stance = "..tostring(stance))
+        -- print("spell = "..tostring(spell).." , Unit = ".. tostring(dest) .. " , stance = "..tostring(stance))
         if stance == 1 then
             if Spell.StanceBattle:Cast() then return true end
         elseif stance == 2 then
@@ -212,11 +212,45 @@ local function smartCast(spell, Unit, pool)
 end
 
 blizzardshit = true
-
+abuseOH = false
+local assistUnit
+local function targetassist()
+end
 function Warrior.Rotation()
     Locals()
-    tagger()
-    questTagger()
+    
+    
+    -- tagger()
+    -- questTagger()
+    if Setting("BattleStance NoCombat") and not Player.Combat then
+        if Stance ~= "Combat" then
+            Spell.StanceBattle:Cast()
+        end
+    end
+    if Setting("Assist Use") then
+        if Setting("Charge") and Target and Target.Distance >= 8 and Target.Distance < 25 and UnitIsTapDenied(Target.Pointer) then
+            
+            if not Player.Combat then
+                print("trying shit")
+                if smartCast("Charge", Target) then return end
+            elseif Spell.Intercept:CD() == 0 then
+                if Spell.Charge:Cast(Target) then return end
+            end
+        end
+
+
+        -- if Target and GetUnitName("targettarget") == "Ivymadison" and Player.Combat and Target.Distance == 0 then
+        --     if Spell.Taunt:CD() <= 0 then
+        --         print("taunt")
+        --         if smartCast("Taunt", Target) then return end
+        --     end
+        --     if Spell.SunderArmor:Cast(Target) then
+        --         print("SunderArmor")
+        --         return
+        --     end
+        -- end
+    end
+    -- if DMW.Tables.AuraCache[Target.Pointer]["Charge Stun"] ~= nil then print("123") end
     -- print(ObjectDescriptor("target", GetOffset("CGUnitData__StateAnimKitID"), Types.Byte))
     -- if ChannelInfo("player") then
     --     print("bad code")
@@ -244,8 +278,43 @@ function Warrior.Rotation()
     --     print("123")
     --     SpellStopCasting()
     -- end
-    if DMW.Time <= castTime + 0.3 then return true end
-    if Stance == "Defense" then return true end
+    if Setting("abuse") and Player.Combat then
+        if DMW.Tables.Swing.Player.HasOH then
+            local hsQueued = IsCurrentSpell(11565)
+            if Player.SwingOH < Player.SwingMH - 0.15 then
+                if not hsQueued then
+                    RunMacroText("/cast Heroic Strike")
+                    abuseOH = true
+                end
+            
+            else
+                if hsQueued then
+                    SpellStopCasting()
+                    abuseOH = false
+                end
+            end
+            -- if Player.SwingMH < 0.2 and abuseOH and IsCurrentSpell(11565) then
+            --     SpellStopCasting()
+            --     abuseOH = false
+            --     print("cancel hs")
+            -- else
+            --     if Player.Power >= 13 and not IsCurrentSpell(11565) and Player.SwingOH < Player.SwingMH and Player.SwingOH < 0.2 then
+            --         abuseOH = true
+            --         RunMacroText("/cast heroic strike")
+            --         print("queue hs")
+            --     else
+            --         if Player.SwingOH > 0.2 and abuseOH then
+            --             SpellStopCasting()
+            --             abuseOH = false
+            --         end
+            --     end
+            -- end
+        end
+    end
+    
+    -- if Player.Combat then return true end
+    -- if DMW.Time <= castTime + 0.3 then return true end
+    -- if Stance == "Defense" then Spell.StanceBers:Cast() end
     -- print(Setting("Rage Lost on stance change"))
     -- print(Spell.Whirlwind:CD())
     -- smartCast("Overpower")
@@ -253,27 +322,41 @@ function Warrior.Rotation()
     -- print(addon_data.player.main_swing_timer)
     -- print(overpowerCheck)
     -- if Player.Instance == "party" then
-        if not Target or not Target.Facing or Target.Distance > 0 then
-            Player:AutoTargetAny(0, true)
-        end
+    -- if not Target or not Target.Facing or Target.Distance > 0 then
+    --     Player:AutoTargetAny(0, true)
+    -- end
     -- end
     if Setting("Stop If Shift") and GetKeyState(0x10) then
         return true
     end
-    if Setting("Charge") and Target and Target.ValidEnemy and not UnitIsTapDenied(Target.Pointer) then
-        if smartCast("Charge", Target) then
-            return true
-        end
-        if Spell.Intercept:IsReady() and smartCast("Intercept", Target) then
-            return true
+    if Setting("Charge") and Target and Target.Distance > 8 and Target.Distance < 25 and not UnitIsTapDenied(Target.Pointer) then
+        if not Player.Combat then
+            print("trying charge default")
+            if smartCast("Charge", Target) then return  end
+        
+        elseif Spell.Intercept:CD() == 0 and smartCast("Intercept", Target) then
+            return 
         end
         StartAttack()
     end
+    if Setting("AutoFaceMelee") then
+        if Player.Combat and Target and Target.Distance == 0 and not Target.Facing then
+            FaceDirection(Target.Pointer, true)
+        end
+    end
+        -- if Target and not Target:IsTanking() then
+                
+        --     if Spell.SunderArmor:Cast(Target) then
+        --         print("SunderArmor")
+        --         return
+        --     end
+        -- end
     if Setting("BattleShout") and not Buff.BattleShout:Exist(Player) then
         if Spell.BattleShout:Cast(Player) then
             return true
         end
     end
+
     --/dump UnitAttackSpeed("target")
     if Setting("Rotation") == 2 then
         if Player.Combat and Enemy5YC > 0 then
@@ -284,26 +367,7 @@ function Warrior.Rotation()
                 StartAttack(Target.Pointer)
             end
 
-            if Setting("AutoFaceMelee") then
-                if Player.SwingLeft == 0 then
-                    if DMW.Time > Player.SwingNext and DMW.Time > swingTime and IsCurrentSpell(6603) then
-                        for _,Unit in ipairs(Enemy5Y) do
-                            local Facing = ObjectFacing("player")
-                            local MouselookActive = false
-                            if IsMouselooking() then
-                                MouselookActive = true
-                                MouselookStop()
-                            end
-                            FaceDirection(Unit.Pointer, true)
-                            FaceDirection(Facing, true)
-                            if MouselookActive then
-                                MouselookStart()
-                            end
-                            swingTime = DMW.Time + 0.1
-                        end
-                    end
-                end
-            end
+            
             if Setting("AutoExecute360") and Stance ~= "Defense" then
                 for _,Unit in ipairs(Enemy5Y) do
                     if Unit.HP < 20 then
@@ -387,9 +451,9 @@ function Warrior.Rotation()
                             return true
                         end
                     else
-                        if Spell.HeroicStrike:IsReady() and Spell.HeroicStrike:Cast() then
-                            return true
-                        end
+                        -- if Spell.HeroicStrike:IsReady() and Spell.HeroicStrike:Cast() then
+                            -- return true
+                        -- end
                     end
                 end
             end 
@@ -439,11 +503,11 @@ function Warrior.Rotation()
             end
 ------------------------------------------------------------------------- 3+ targets------------------------------------------------------------------------- 3+ targets------------------------------------------------------------------------- 3+ targets
             if Enemy5YC >= 3 then
-                cancelAAmod()
+                -- cancelAAmod()
                 if Setting("SweepingStrikes") and Enemy8YC >= 2 and Spell.SweepStrikes:CD() <= 2 and HUD.Sweeping == 1 then
-                    if IsCurrentSpell(Spell.Cleave.SpellID) or IsCurrentSpell(Spell.HeroicStrike.SpellID) then
-                        RunMacroText("/stopcasting")
-                    end
+                    -- if IsCurrentSpell(Spell.Cleave.SpellID) or IsCurrentSpell(Spell.HeroicStrike.SpellID) then
+                        -- RunMacroText("/stopcasting")
+                    -- end
                     if smartCast("SweepStrikes", Player, true) then
                         return true
                     end
@@ -462,11 +526,11 @@ function Warrior.Rotation()
                 end 
 ------------------------------------------------------------------------- 2 targets------------------------------------------------------------------------ 2 targets------------------------------------------------------------------------ 2 targets
             elseif Enemy5YC == 2 then
-                cancelAAmod()
+                -- cancelAAmod()
                 if Setting("SweepingStrikes") and Enemy8YC >= 2 and Spell.SweepStrikes:CD() <= 2 and HUD.Sweeping == 1 then
-                    if IsCurrentSpell(Spell.Cleave.SpellID) or IsCurrentSpell(Spell.HeroicStrike.SpellID) then
-                        RunMacroText("/stopcasting")
-                    end
+                    -- if IsCurrentSpell(Spell.Cleave.SpellID) or IsCurrentSpell(Spell.HeroicStrike.SpellID) then
+                        -- RunMacroText("/stopcasting")
+                    -- end
                     if smartCast("SweepStrikes", Player, true) then
                         return true
                     end
@@ -490,7 +554,7 @@ function Warrior.Rotation()
                 end
 ------------------------------------------------------------------------- 1 targets------------------------------------------------------------------------ 1 targets------------------------------------------------------------------------ 1 targets
             elseif Target and Target.ValidEnemy and Enemy5YC == 1 then
-                cancelAAmod() 
+                -- cancelAAmod() 
                 -- if Debuff.Rend:Refresh(Target) then
                 --     print(Debuff.Rend:Remain(Target))
                 -- end
@@ -505,7 +569,10 @@ function Warrior.Rotation()
                 if Spell.MortalStrike:CD() <= 3 and smartCast("MortalStrike", Target, true) then
                     return true
                 end
-                if Enemy8YC > 0 and smartCast("Whirlwind", Target, true) then
+                if Spell.Bloodthirst:CD() <= 3 and smartCast("Bloodthirst", Target, true) then
+                    return true
+                end
+                if Setting("Whirlwind") and Enemy8YC > 0 and smartCast("Whirlwind", Target, true) then
                     return true
                 end
                 -- if not IsCurrentSpell(Spell.HeroicStrike.SpellID) and dumpEnabled then
