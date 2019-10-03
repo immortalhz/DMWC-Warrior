@@ -60,7 +60,7 @@ local function Locals()
     if castTime == nil then castTime = DMW.Time end
     rageLost = Player.Power - Talent.TacticalMastery.Rank*5
     dumpEnabled = false
-    -- if HUD.Sweeping == 1 and Buff.SweepStrikes:Exist(Player) then DMWHUDSWEEPING:Toggle(2) end
+    if HUD.Sweeping == 1 and Buff.SweepStrikes:Exist(Player) then DMWHUDSWEEPING:Toggle(2) end
 end
 
 local function cancelAAmod()
@@ -80,7 +80,7 @@ local function dumpRage(value)
     elseif value >= 20 then
             if EnemyMeleeCount >= 2 then
                 if Spell.ThunderClap:Cast(Target) then return true end
-                if smartCast("cleavehs") then end
+                -- if smartCast("cleavehs") then end
             end
             -- if Spell.Slam:Cast(Target) then return true end
 
@@ -95,11 +95,17 @@ local function stanceDanceCast(spell, dest, stance)
     if rageLost <= Setting("Rage Lost on stance change") then
         -- print("spell = "..tostring(spell).." , Unit = ".. tostring(dest) .. " , stance = "..tostring(stance))
         if stance == 1 then
-            if Spell.StanceBattle:Cast() then return end
+            if Spell.StanceBattle:IsReady() then
+                if Spell.StanceBattle:Cast() then return true  end
+            end
         elseif stance == 2 then
-            if Spell.StanceDefense:Cast() then return end
+            if Spell.StanceDefense:IsReady() then
+                if Spell.StanceDefense:Cast() then return true  end
+            end
         elseif stance == 3 then
-            if Spell.StanceBers:Cast() then return end
+            if Spell.StanceBers:IsReady() then
+                if Spell.StanceBers:Cast() then return true end
+            end
         end
     else
         dumpRage(rageLost)
@@ -145,12 +151,14 @@ end
 
 local function regularCast(spell, Unit, pool)
     if pool and Spell[spell]:Cost() > Player.Power then
+        
         return true
     end
     if Spell[spell]:Cast(Unit) then
         return true
     end
 end
+
 
 local function smartCast(spell, Unit, pool)
     -- if spell == "cleavehs" then 
@@ -166,7 +174,44 @@ local function smartCast(spell, Unit, pool)
     -- end
     if pool and Spell[spell]:Cost() > Player.Power then
         if spell == "SweepStrikes" and Stance ~= "Battle" then
-            Spell.StanceBattle:Cast()
+            if Spell.StanceBattle:IsReady() then
+                Spell.StanceBattle:Cast()
+            else
+                return true
+            end
+        elseif spell == "Whirlwind" then
+            if Stance ~= "Bers" then
+                if Spell.StanceBers:IsReady() then
+                    Spell.StanceBers:Cast()
+                else
+                    return true
+                end
+            end
+            if Setting("Bloodrage") then
+                if Spell.Bloodrage:IsReady() then
+                    Spell.Bloodrage:Cast()
+                end
+            else
+                return true
+            end
+            if Setting("Bloodrage") then
+                if Spell.Bloodrage:IsReady() then
+                    Spell.Bloodrage:Cast()
+                end
+            end
+        end
+        if Setting("Berserker Rage") then
+            local count = 0
+            for _, Unit in ipairs(DMW.Enemies) do
+                if Player:IsTanking(Unit) then
+                    count = count + 1
+                    if count > 0 and count >= Setting("Berserker Rage") then
+                        if Spell.BersRage:IsReady() then
+                            Spell.BersRage:Cast()
+                        end
+                    end
+                end
+            end
         end
         return true
     else
@@ -211,6 +256,21 @@ local function smartCast(spell, Unit, pool)
     end
 end
 
+local function bersCheck()
+    if Setting("Berserker Rage") then
+        local count = 0
+        for _, Unit in ipairs(DMW.Enemies) do
+            if Player:IsTanking(Unit) then
+                count = count + 1
+                if count > 0 and count >= Setting("Berserker Rage") then
+                    if smartCast("BersRage") then return true end
+                end
+            end
+        end
+    end
+end
+
+
 blizzardshit = true
 abuseOH = false
 local assistUnit
@@ -224,7 +284,9 @@ function Warrior.Rotation()
     -- questTagger()
     if Setting("BattleStance NoCombat") and not Player.Combat then
         if Stance ~= "Battle" then
-            Spell.StanceBattle:Cast()
+            if Spell.StanceBattle:IsReady() then
+                Spell.StanceBattle:Cast()
+            end
         end
     end
     if Setting("Assist Use") then
@@ -314,7 +376,7 @@ function Warrior.Rotation()
     
     -- if Player.Combat then return true end
     if DMW.Time <= castTime + 0.3 then return true end
-    if Stance == "Defense" then Spell.StanceBers:Cast() end
+    -- if Stance == "Defense" then Spell.StanceBers:Cast() end
     -- print(Setting("Rage Lost on stance change"))
     -- print(Spell.Whirlwind:CD())
     -- smartCast("Overpower")
@@ -329,11 +391,12 @@ function Warrior.Rotation()
     if Setting("Stop If Shift") and GetKeyState(0x10) then
         return true
     end
-    if Setting("Charge") and not Setting("Assist Use") and Target and Target.Distance > 8 and Target.Distance < 25 and not UnitIsTapDenied(Target.Pointer) then
+    if Setting("Charge") and not Setting("Assist Use") and Target and not Target.Dead and Target.Distance > 8 and Target.Distance < 25 and not UnitIsTapDenied(Target.Pointer) then
         if not Player.Combat then
-            if smartCast("Charge", Target) then return end
-        elseif Spell.Intercept:CD() == 0 and smartCast("Intercept", Target) then
-            return 
+            if smartCast("Charge", Target) then return true end
+        end
+        if Spell.Intercept:CD() == 0 then
+            if smartCast("Intercept", Target) then return true end
         end
         StartAttack()
     end
@@ -361,7 +424,7 @@ function Warrior.Rotation()
             if Player:IsTanking(Unit) then
                 count = count + 1
                 if count > 0 and count >= Setting("Berserker Rage") then
-                    if smartCast("BersRage") then return end
+                    if smartCast("BersRage") then return true end
                 end
             end
         end
@@ -374,9 +437,9 @@ function Warrior.Rotation()
                 StartAttack(Target.Pointer)
             end
             
-            if Setting("AutoExecute360") and Stance ~= "Defense" then
+            if Setting("AutoExecute360") and Stance ~= "Defense" and Spell.Execute:IsReady() then
                 for _,Unit in ipairs(EnemyMelee) do
-                    if Unit.HP < 20 and not Unit.Dead   then
+                    if Unit.HP < 20 and not Unit.Dead then
                         if Spell.Execute:Cast(Unit) then 
                             return true
                         end
@@ -493,97 +556,92 @@ function Warrior.Rotation()
                     end
                 end
             end
-            if Setting("AutoExecute360") then
-                for _,Unit in ipairs(EnemyMelee) do
-                    if Unit.HP < 20 then
-                        local oldTarget = Target and Target.Pointer or false
-                        TargetUnit(Unit.Pointer)
-                        if smartCast("Execute", Target, true) then
-                            if not oldTarget then
-                                TargetUnit(oldTarget)
+            
+------------------------------------------------------------------------- 3+ targets------------------------------------------------------------------------- 3+ targets------------------------------------------------------------------------- 3+ targets
+                -- cancelAAmod()
+            if Enemy8YC >= 2 then
+                if Setting("SweepingStrikes") and Enemy8YC >= 2 and Spell.SweepStrikes:CD() <= 2 and HUD.Sweeping == 1 then
+                    -- if IsCurrentSpell(Spell.Cleave.SpellID) or IsCurrentSpell(Spell.HeroicStrike.SpellID) then
+                        -- RunMacroText("/stopcasting")
+                    -- end
+                    if smartCast("SweepStrikes", Player, true) then return true end
+                end
+
+                if Setting("Whirlwind") and Spell.Whirlwind:CD() <= 3 then
+                    if smartCast("Whirlwind", Player, true) then return true end
+                end
+
+                if Setting("MortalStrike") and Spell.Whirlwind:CD() <= 2 and EnemyMeleeCount > 0 then
+                    if smartCast("MortalStrike", Target, true) then return true end
+                end 
+------------------------------------------------------------------------- 2 targets------------------------------------------------------------------------ 2 targets------------------------------------------------------------------------ 2 targets
+            -- elseif EnemyMeleeCount == 2 then
+            --     -- cancelAAmod()
+            --     if Setting("SweepingStrikes") and Enemy8YC >= 2 and Spell.SweepStrikes:CD() <= 2 and HUD.Sweeping == 1 then
+            --         -- if IsCurrentSpell(Spell.Cleave.SpellID) or IsCurrentSpell(Spell.HeroicStrike.SpellID) then
+            --             -- RunMacroText("/stopcasting")
+            --         -- end
+            --         if smartCast("SweepStrikes", Player, true) then
+            --             return true
+            --         end
+            --     end
+
+            --     if Setting("Whirlwind") and Spell.Whirlwind:CD() <= 3 and Enemy8YC > 0 then
+            --         if smartCast("Whirlwind", Player, true) then 
+            --             return true
+            --         end
+            --     end
+
+            --     if Setting("MortalStrike") and Spell.Whirlwind:CD() <= 2 and EnemyMeleeCount > 0 then
+            --         if smartCast("MortalStrike", Target, true) then 
+            --             return true
+            --         end
+            --     end 
+            --     if not IsCurrentSpell(Spell.Cleave.SpellID) and dumpStart() then
+            --         if Spell.Cleave:IsReady() and Spell.Cleave:Cast() then
+            --             return true
+            --         end
+            --     end
+------------------------------------------------------------------------- 1 targets------------------------------------------------------------------------ 1 targets------------------------------------------------------------------------ 1 targets
+            end
+                if Setting("AutoExecute360") then
+                    for _,Unit in ipairs(EnemyMelee) do
+                        if Unit.HP < 20 then
+                            -- print("exec")
+                            -- local oldTarget = Target and Target.Pointer or false
+                            -- TargetUnit(Unit.Pointer)
+                            if smartCast("Execute", Unit, true) then 
+                                return true
                             end
-                            return true
                         end
                     end
                 end
-            end
-------------------------------------------------------------------------- 3+ targets------------------------------------------------------------------------- 3+ targets------------------------------------------------------------------------- 3+ targets
-            if EnemyMeleeCount >= 3 then
-                -- cancelAAmod()
-                if Setting("SweepingStrikes") and Enemy8YC >= 2 and Spell.SweepStrikes:CD() <= 2 and HUD.Sweeping == 1 then
-                    -- if IsCurrentSpell(Spell.Cleave.SpellID) or IsCurrentSpell(Spell.HeroicStrike.SpellID) then
-                        -- RunMacroText("/stopcasting")
-                    -- end
-                    if smartCast("SweepStrikes", Player, true) then
-                        return true
-                    end
-                end
-
-                if Setting("Whirlwind") and Spell.Whirlwind:CD() <= 3 and Enemy8YC > 0 then
-                    if smartCast("Whirlwind", Player, true) then 
-                        return true
-                    end
-                end
-
-                if Setting("MortalStrike") and Spell.Whirlwind:CD() <= 2 and EnemyMeleeCount > 0 then
-                    if smartCast("MortalStrike", Target, true) then 
-                        return true
-                    end
-                end 
-------------------------------------------------------------------------- 2 targets------------------------------------------------------------------------ 2 targets------------------------------------------------------------------------ 2 targets
-            elseif EnemyMeleeCount == 2 then
-                -- cancelAAmod()
-                if Setting("SweepingStrikes") and Enemy8YC >= 2 and Spell.SweepStrikes:CD() <= 2 and HUD.Sweeping == 1 then
-                    -- if IsCurrentSpell(Spell.Cleave.SpellID) or IsCurrentSpell(Spell.HeroicStrike.SpellID) then
-                        -- RunMacroText("/stopcasting")
-                    -- end
-                    if smartCast("SweepStrikes", Player, true) then
-                        return true
-                    end
-                end
-
-                if Setting("Whirlwind") and Spell.Whirlwind:CD() <= 3 and Enemy8YC > 0 then
-                    if smartCast("Whirlwind", Player, true) then 
-                        return true
-                    end
-                end
-
-                if Setting("MortalStrike") and Spell.Whirlwind:CD() <= 2 and EnemyMeleeCount > 0 then
-                    if smartCast("MortalStrike", Target, true) then 
-                        return true
-                    end
-                end 
-                if not IsCurrentSpell(Spell.Cleave.SpellID) and dumpStart() then
-                    if Spell.Cleave:IsReady() and Spell.Cleave:Cast() then
-                        return true
-                    end
-                end
-------------------------------------------------------------------------- 1 targets------------------------------------------------------------------------ 1 targets------------------------------------------------------------------------ 1 targets
-            elseif Target and Target.ValidEnemy and EnemyMeleeCount == 1 then
+                if Target and Target.ValidEnemy then
                 -- cancelAAmod() 
                 -- if Debuff.Rend:Refresh(Target) then
                 --     print(Debuff.Rend:Remain(Target))
                 -- end
-                if Setting("SunderArmor") and Target.HP >= Setting("SunderArmor") then
-                    if Debuff.SunderArmor:Stacks(Target) < 5 or Debuff.SunderArmor:Refresh(Target) then
-                        if smartCast("SunderArmor", Target, true) then return end
+                    if Setting("SunderArmor") and Target.HP >= Setting("SunderArmor") then
+                        if Debuff.SunderArmor:Stacks(Target) < 5 or Debuff.SunderArmor:Refresh(Target) then
+                            if smartCast("SunderArmor", Target, true) then return true end
+                        end
                     end
-                end
-                if Spell.MortalStrike:CD() <= 3 and smartCast("MortalStrike", Target, true) then
-                    return 
-                end
-                if Spell.Bloodthirst:CD() <= 3 and smartCast("Bloodthirst", Target, true) then
-                    return 
-                end
-                if Setting("Whirlwind") and Enemy8YC > 0 and smartCast("Whirlwind", Player, true) then
-                    return 
-                end
+                    if Spell.MortalStrike:CD() <= 3 then
+                        if smartCast("MortalStrike", Target, true) then return true end
+                    end
+                    -- if Spell.Bloodthirst:CD() <= 3 and smartCast("Bloodthirst", Target, true) then
+                    --     return 
+                    -- end
+                    if Setting("Whirlwind") and Enemy8YC > 0 then
+                        if smartCast("Whirlwind", Player, true) then return true end
+                    end
                 -- if not IsCurrentSpell(Spell.HeroicStrike.SpellID) and dumpEnabled then
                 --     if Spell.HeroicStrike:IsReady() and Spell.HeroicStrike:Cast() then
                 --         return true
                 --     end
                 -- end
-            end  --enemies
+                end
+            
 
             
             -- if Setting("Berserker Rage") then
