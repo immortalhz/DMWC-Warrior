@@ -2,7 +2,7 @@ local DMW = DMW
 local Warrior = DMW.Rotations.WARRIOR
 local Rotation = DMW.Helpers.Rotation
 local Setting = DMW.Helpers.Rotation.Setting
-local Player, Buff, Debuff, Spell, Stance, Target, Talent, Item, GCD, CDs, HUD, EnemyMelee, EnemyMeleeCount, Enemy14Y,Enemy14YC, Enemy8Y, Enemy8YC, rageLost, dumpEnabled, castTime, syncSS, combatLeftCheck
+local Player, Buff, Debuff, Spell, Stance, Target, Talent, Item, GCD, CDs, HUD, EnemyMelee, EnemyMeleeCount, Enemy14Y,Enemy14YC, Enemy8Y, Enemy8YC, rageLost, dumpEnabled, castTime, syncSS, combatLeftCheck, forcedStance
 
 local stanceCheckBattle = {
     ["Overpower"] = true,
@@ -56,6 +56,17 @@ local function Locals()
         Stance = "Defense"
     else
         Stance = "Bers"
+    end
+    if Setting("Stance") > 1 then
+        if Setting("Stance") == 2 then
+            forcedStance = "Battle"
+        elseif Setting("Stance") == 3 then
+            forcedStance = "Defense"
+        elseif Setting("Stance") == 4 then
+            forcedStance = "Bers"
+        end
+    else
+        forcedStance = nil
     end
     if castTime == nil then castTime = DMW.Time end
     rageLost = Player.Power - Talent.TacticalMastery.Rank*5
@@ -162,6 +173,29 @@ local function regularCast(spell, Unit, pool)
     end
 end
 
+local function forceStance(spell)
+    if forcedStance and forcedStance ~= Stance then
+        if forcedStance == "Bers" and (stanceCheckBers[spell] or (stanceCheckBattle[spell] == nil and stanceCheckDefence[spell] == nil)) then
+            if Spell.StanceBers:IsReady() then
+                Spell.StanceBers:Cast()
+            else
+                return true
+            end
+        elseif forcedStance == "Defense" and (stanceCheckDefence[spell] or (stanceCheckBattle[spell] == nil and stanceCheckBers[spell] == nil)) then
+            if Spell.StanceDefense:IsReady() then
+                Spell.StanceDefense:Cast()
+            else
+                return true
+            end
+        elseif forcedStance == "Battle" and (stanceCheckBattle[spell] or (stanceCheckBers[spell] == nil and stanceCheckDefence[spell] == nil)) then
+            if Spell.StanceBattle:IsReady() then
+                Spell.StanceBattle:Cast()
+            else
+                return true
+            end
+        end
+    end
+end
 
 local function smartCast(spell, Unit, pool)
     -- if spell == "cleavehs" then 
@@ -190,8 +224,8 @@ local function smartCast(spell, Unit, pool)
                     return true
                 end
             end
-            
         end
+        if forceStance(spell) then return true end
         if Setting("Berserker Rage") then
             local count = 0
             for _, Unit in ipairs(DMW.Enemies) do
@@ -208,6 +242,9 @@ local function smartCast(spell, Unit, pool)
         return true
     else
         castTime = DMW.Time
+        if forcedStance then
+            if forceStance(spell) then return true end
+        end
         if Stance == "Battle" then
             if not stanceCheckBattle[spell] then
                 if stanceCheckDefence[spell] then
@@ -446,7 +483,6 @@ function Warrior.Rotation()
     --         return true
     --     end
     -- end
-
     if Setting("Berserker Rage") then
         local count = 0
         for _, Unit in ipairs(DMW.Enemies) do
@@ -465,20 +501,20 @@ function Warrior.Rotation()
             if Target and Target.ValidEnemy and not IsCurrentSpell(Spell.Attack.SpellID) then
                 StartAttack()
             end
-            if Setting("Stance") == 2 and Stance ~= "Defense" then
-                if Spell.StanceDefense:IsReady() then
-                    Spell.StanceDefense:Cast()
-                else
-                    return true
-                end
-            elseif Setting("Stance") == 3 and Stance ~= "Bers" then
-                if Spell.StanceBers:IsReady() then
-                    Spell.StanceBers:Cast()
-                else
-                    return true
-                end
+            -- if Setting("Stance") == 2 and Stance ~= "Defense" then
+            --     if Spell.StanceDefense:IsReady() then
+            --         Spell.StanceDefense:Cast()
+            --     else
+            --         return true
+            --     end
+            -- elseif Setting("Stance") == 3 and Stance ~= "Bers" then
+            --     if Spell.StanceBers:IsReady() then
+            --         Spell.StanceBers:Cast()
+            --     else
+            --         return true
+            --     end
 
-            end
+            -- end
             if Setting("Pummel") and Target and Target:Interrupt() then
                 smartCast("Pummel", Target, true)
             end
@@ -514,6 +550,7 @@ function Warrior.Rotation()
 
                 if Setting("MortalStrike") and Target and Spell.Whirlwind:CD() >= 2 and EnemyMeleeCount > 0 then
                     if smartCast("MortalStrike", Target, true) then return true end
+                    if smartCast("BloodThirst", Target, true) then return true end
                 end 
             else
                 if Target and Target.ValidEnemy then
