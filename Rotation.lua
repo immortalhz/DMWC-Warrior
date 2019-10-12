@@ -358,10 +358,10 @@ function Warrior.Rotation()
     if Setting("Assist Use") then
         if Setting("Charge") and Target and Target.Distance >= 8 and Target.Distance < 25 and UnitIsTapDenied(Target.Pointer) and not Target.Dead then
             
-            if not Player.Combat then
+            if not Player.Combat and Spell.Charge:CD() == 0 then
                 -- print("trying shit")
                 if smartCast("Charge", Target) then return end
-            elseif Spell.Intercept:CD() == 0 then
+            elseif Spell.Intercept:CD() == 0 and Player.Power >= 10 and not Spell.Charge:LastCast() then
                 if Spell.Charge:Cast(Target) then return end
             end
         end
@@ -548,7 +548,7 @@ function Warrior.Rotation()
                     if smartCast("Cleave", Player, true) then return true end
                 end
 
-                if Setting("MortalStrike") and Target and Spell.Whirlwind:CD() >= 2 and EnemyMeleeCount > 0 then
+                if Setting("MS/BT") and Target and Spell.Whirlwind:CD() >= 2 and EnemyMeleeCount > 0 then
                     if smartCast("MortalStrike", Target, true) then return true end
                     if smartCast("BloodThirst", Target, true) then return true end
                 end 
