@@ -29,6 +29,14 @@ function Warrior.Settings()
             [2] = {Text = "Charge |cFFFFFF00Off", Tooltip = ""}
         }
     }
+    UI.HUD.Options[3] = {
+        Execute = {
+            [1] = {Text = "Execute 360++", Tooltip = ""},
+            [2] = {Text = "Execute If <= 3 units", Tooltip = ""},
+            [3] = {Text = "Execute |cffffffffTarget", Tooltip = ""},
+            [4] = {Text = "Execute |cFFFFFF00Disabled", Tooltip = ""}
+        }
+    }
     -- UI.AddHeader("This Is A Header")
     -- UI.AddDropdown("This Is A Dropdown", nil, {"Yay", "Nay"}, 1)
     -- UI.AddToggle("This Is A Toggle", "This is a tooltip", true)
