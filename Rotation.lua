@@ -92,19 +92,27 @@ end
 
 local function dumpRage(value)
     -- print(value)
-    if value >= 30 then
-        if Spell.MortalStrike:Cast(Target) then return true end
-    elseif value >= 20 then
-            if EnemyMeleeCount >= 2 then
-                if Spell.ThunderClap:Cast(Target) then return true end
-                -- if smartCast("cleavehs") then end
-            end
-            -- if Spell.Slam:Cast(Target) then return true end
+    -- if value >= 30 then
+    --     if Spell.MortalStrike:Cast(Target) then return true end
+    -- else
+    -- if value >= 20 then
+    --     if EnemyMeleeCount >= 2 then
+    --         if Spell.ThunderClap:Cast(Target) then return true end
+    --         -- if smartCast("cleavehs") then end
+    --     end
+        -- if Spell.Slam:Cast(Target) then return true end
 
     -- elseif value >= 15 then
     --     if Spell.Slam:Cast(Target) then return true end
-    elseif value >= 10 then
-        if Spell.Hamstring:Cast(Target) then return true end
+    -- else
+    if value >= 10 then
+        if Spell.Bloodthirst:IsReady() then
+            if Spell.Bloodthirst:Cast(Target) then return true end
+        elseif Spell.Whirlwind:IsReady() then
+            if Spell.Whirlwind:Cast(Player) then return true end   
+        else
+            if Spell.Hamstring:Cast(Target) then return true end
+        end
     end
 end
 
@@ -149,16 +157,22 @@ end
 
 local onetime = true
 local function tagger() 
-    if Setting("Tagger") and onetime then
-        for k,v in pairs(DMW.Units) do
-            if v.Name == "High Chief Winterfall" and not UnitAffectingCombat(v.Pointer) then
-                TargetUnit(v.Pointer)
-                StartAttack()
-                if v.Distance <= 5 then
-                    Spell.Bloodrage:Cast(Player)
-                    Spell.Hamstring:Cast(Target)
+    if Setting("Tagger") then
+        if onetime then
+            for k,v in pairs(DMW.Units) do
+                if v.Name == "High Chief Winterfall" then
+                    TargetUnit(v.Pointer)
+                    StartAttack()
+                    if v.Distance <= 5 then
+                        Spell.Bloodrage:Cast(Player)
+                        Spell.Hamstring:Cast(Target)
+                    end
+                    onetime = false
                 end
-                onetime = false
+            end
+        else
+            if not Player.Combat then
+                onetime = true
             end
         end
             -- if Player:AutoTargetQuest(5) then
@@ -341,25 +355,27 @@ end
 -- Execute |cffffffffTarget", 
 -- Execute |cFFFFFF00Disabled"
 local function AutoExecute()
-    if HUD.Execute == 1 and Spell.Execute:IsReady() then
+    if HUD.Execute == 1  then
         for _,Unit in ipairs(EnemyMelee) do
             if Unit.HP > 0 and Unit.HP < 20 and not Unit.Dead and Unit.Attackable and Unit.Facing then
                 -- print("exec")
-                -- local oldTarget = Target and Target.Pointer or false
-                -- TargetUnit(Unit.Pointer)
-                if smartCast("Execute", Unit, true) then return true end
+                local oldTarget = Target and Target.Pointer or false
+                TargetUnit(Unit.Pointer)
+                if smartCast("Execute", Target, true) then return true end
                 -- return true                    
             end
         end
     elseif HUD.Execute == 2 then
 
     elseif HUD.Execute == 3 then
-
+        if Target and Target.HP < 20 and not Target.Dead and Target.Attackable then
+            if smartCast("Execute", Target, true) then return true end
+        end
     end
 end
 
 local function AutoOverpower()
-    if Setting("Overpower") and Player.Power >= 5 and Spell.Overpower:CD() <= 0.5 and (Stance == "Battle" or Player.Power <= 25) then
+    if Setting("Overpower") and Player.Power >= 5 and Spell.Overpower:CD() <= Spell.StanceBattle:CD() and (Stance == "Battle" or Player.Power <= 35) then
         for _,Unit in ipairs(EnemyMelee) do
             if Player.OverpowerUnit[Unit.Pointer] ~= nil and Spell.Overpower:CD() < Player.OverpowerUnit[Unit.Pointer].time then
                 if smartCast("Overpower", Unit, nil) then
@@ -547,7 +563,7 @@ function Warrior.Rotation()
                     end
                 end
             else
-                if hsQueued and Player.Power <= 50 then
+                if hsQueued and Player.Power < Setting("Rage Dump") then
                     -- print("off")
                     SpellStopCasting()
                     
@@ -586,31 +602,39 @@ function Warrior.Rotation()
     -- print(overpowerCheck)
     -- if Player.Instance == "party" then
     if Setting("AutoTarget") and (not Target or not Target.Attackable or Target.Dead or not Target.Facing or IsSpellInRange("Hamstring", "target") == 0) and (targetChange == nil or DMW.Time > targetChange) then
-        local FacingTarget
-        for _, Unit in ipairs(DMW.Attackable) do
-            -- if Unit.Distance <= 3 and Unit.CreatureType ~= "Critter" and Unit.Facing and not Unit.Dead and not Unit.Target and (Unit.Player or not UnitPlayerControlled(Unit.Pointer)) and not UnitIsTapDenied(Unit.Pointer) then
-            --     TargetUnit(Unit.Pointer)
-            --     targetChange = DMW.Time + 0.1
-            --     print("changed Target")
-            --     break
-            -- end
-            if Unit.Distance <= 3 and Unit.Attackable and Unit.CreatureType ~= "Critter" and not Unit.Dead and not Unit.Target and (Unit.Player or not UnitPlayerControlled(Unit.Pointer)) and not UnitIsTapDenied(Unit.Pointer) then
-                if Unit.Facing then
-                    TargetUnit(Unit.Pointer)
+        -- -- print("huy")
+        -- local FacingTarget
+        -- for _, Unit in ipairs(DMW.Units) do
+        --     -- if Unit.Distance <= 3 and Unit.CreatureType ~= "Critter" and Unit.Facing and not Unit.Dead and not Unit.Target and (Unit.Player or not UnitPlayerControlled(Unit.Pointer)) and not UnitIsTapDenied(Unit.Pointer) then
+        --     --     TargetUnit(Unit.Pointer)
+        --     --     targetChange = DMW.Time + 0.1
+        --     --     print("changed Target")
+        --     --     break
+        --     -- end
+        --     if Unit.Distance <= 2 and Unit.Attackable and not Unit.Dead then
+        --         -- if Unit.Facing then
+        --             TargetUnit(Unit.Pointer)
                     
-                    print("changed Target")
-                else
-                    FacingTarget = Unit.Pointer
-                end
-                targetChange = DMW.Time + 0.1
-                break
+        --             print("changed Target")
+        --         -- else
+        --         --     if not Player.Moving then
+        --         --         FacingTarget = Unit.Pointer
+        --         --     end
+        --         -- end
+        --         targetChange = DMW.Time + 0.1
+        --         break
+        --     end
+        -- end
+        -- if FacingTarget ~= nil then
+        --     FaceDirection(FacingTarget, true)
+        --     TargetUnit(FacingTarget)
+        --     FacingTarget = nil
+        --     print("changed face and Target")
+        -- end
+        if Player.Combat then
+            if Player:AutoTarget(5, true) then
+                return true
             end
-        end
-        if FacingTarget ~= nil then
-            FaceDirection(FacingTarget, true)
-            TargetUnit(FacingTarget)
-            FacingTarget = nil
-            print("changed face and Target")
         end
     end
     -- end
@@ -686,7 +710,7 @@ function Warrior.Rotation()
                 if Setting("Pummel") and Target and Target:Interrupt() then
                     smartCast("Pummel", Target, true)
                 end
-                if Enemy8YC >= 2 then
+                if Enemy8YC >= 3 then
                     if Setting("Whirlwind") and Spell.Whirlwind:CD() <= Player:GCDRemain() + 0.3  then
                         if smartCast("Whirlwind", Player, true) then return true end
                     end
@@ -701,17 +725,7 @@ function Warrior.Rotation()
                     if Setting("MS/BT") and Target and (Spell.Whirlwind:CD() >= 4  or Player.Power >= 45) then
                         if smartCast("Bloodthirst", Target, true) then return true end
                     end
-                    if Player.Power >= 50 and not IsCurrentSpell(Spell.Cleave.SpellID) and not IsCurrentSpell(Spell.HeroicStrike.SpellID) then
-                        if EnemyMeleeCount >= 2 then
-                            if Spell.Cleave:IsReady() and Spell.Cleave:Cast() then
-                                return true
-                            end
-                        else
-                            if Spell.HeroicStrike:IsReady() and Spell.HeroicStrike:Cast() then
-                                return true
-                            end
-                        end
-                    end
+                    
                 else
                     if Target and Target.ValidEnemy then
                         
@@ -729,6 +743,9 @@ function Warrior.Rotation()
 
 
                         if Setting("MS/BT") and Spell.Bloodthirst:CD() <= Player:GCDRemain() + 0.3 then
+                            if Player.Power < 30 then 
+                                if AutoOverpower() then return true end
+                            end
                             if smartCast("Bloodthirst", Target, true) then return true end
                         end
 
@@ -738,21 +755,21 @@ function Warrior.Rotation()
                             if smartCast("Whirlwind", Player, nil) then return true end
                         end
 
-                        if (Spell.Bloodthirst:CD() >= 4 and Spell.Whirlwind:CD() >= 5) or Player.Power >= 70 then
-                            if smartCast("Hamstring", Target, true) then return true end
-                        end
+                        -- if (Spell.Bloodthirst:CD() >= 4 and Spell.Whirlwind:CD() >= 5) or Player.Power >= 70 then
+                        --     if smartCast("Hamstring", Target, true) then return true end
+                        -- end
 
-                        if Player.Power >= 50 and not IsCurrentSpell(Spell.Cleave.SpellID) and not IsCurrentSpell(Spell.HeroicStrike.SpellID) then
-                            if EnemyMeleeCount >= 2 then
-                                if Spell.Cleave:IsReady() and Spell.Cleave:Cast() then
-                                    return true
-                                end
-                            else
-                                if Spell.HeroicStrike:IsReady() and Spell.HeroicStrike:Cast() then
-                                    return true
-                                end
-                            end
-                        end
+                        -- if Player.Power >= 50 and not IsCurrentSpell(Spell.Cleave.SpellID) and not IsCurrentSpell(Spell.HeroicStrike.SpellID) then
+                        --     if EnemyMeleeCount >= 2 then
+                        --         if Spell.Cleave:IsReady() and Spell.Cleave:Cast() then
+                        --             return true
+                        --         end
+                        --     else
+                        --         if Spell.HeroicStrike:IsReady() and Spell.HeroicStrike:Cast() then
+                        --             return true
+                        --         end
+                        --     end
+                        -- end
 
                     -- else
                     --     AutoBuff()
@@ -761,14 +778,18 @@ function Warrior.Rotation()
                     end
                 end
                 bersOnTanking()
-                if Player.Power >= 50 and not IsCurrentSpell(Spell.Cleave.SpellID) and not IsCurrentSpell(Spell.HeroicStrike.SpellID) then
-                    if EnemyMeleeCount >= 2 then
-                        if Spell.Cleave:IsReady() and Spell.Cleave:Cast() then
-                            return true
-                        end
-                    else
-                        if Spell.HeroicStrike:IsReady() and Spell.HeroicStrike:Cast() then
-                            return true
+                if Player.Power >= Setting("Rage Dump") then
+                    if not hsQueued then
+                        if EnemyMeleeCount >= 2 and Player.Power >= 20 then
+                            RunMacroText("/cast Cleave")
+                            
+                        else
+                            if Player.Power >= 13 then 
+                                RunMacroText("/cast Heroic Strike")
+                                
+                            end
+                            -- print("MH = "..Player.SwingMH..", OH = "..Player.SwingOH)
+                            
                         end
                     end
                 end
