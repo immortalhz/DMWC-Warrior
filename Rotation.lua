@@ -425,7 +425,7 @@ local function AutoBuff()
     end
 end
 
-function checkOnHit()
+local function checkOnHit()
     -- for k,v in ipairs(Spell.HeroicStrike.Ranks) do
     --     if IsCurrentSpell(v) then
     --         return true
@@ -820,11 +820,12 @@ function Warrior.Rotation()
                     --     AutoExecute()
                     end
                 end
-                bersOnTanking()
+                
                 if Player.Power >= Setting("Rage Dump") then
-                    dumpRage(Player.Power - Setting("Rage Dump"))
+                    if dumpRage(Player.Power - Setting("Rage Dump")) then return true end
                 end
-            
+
+                bersOnTanking()
             -- if Setting("Berserker Rage") then
             --     for _, Unit in ipairs(DMW.Enemies)
             -- end
