@@ -91,6 +91,7 @@ local function dumpStart()
 end
 
 local function dumpRage(value)
+    local value = value
     -- print(value)
     -- if value >= 30 then
     --     if Spell.MortalStrike:Cast(Target) then return true end
@@ -105,15 +106,36 @@ local function dumpRage(value)
     -- elseif value >= 15 then
     --     if Spell.Slam:Cast(Target) then return true end
     -- else
-    if value >= 10 then
-        if Spell.Bloodthirst:IsReady() then
-            if Spell.Bloodthirst:Cast(Target) then return true end
-        elseif Spell.Whirlwind:IsReady() then
-            if Spell.Whirlwind:Cast(Player) then return true end   
+    if not hsQueued then
+        if EnemyMeleeCount >= 2 and Player.Power >= 20 then
+            RunMacroText("/cast Cleave")
+            value = value - 20
         else
-            if Spell.Hamstring:Cast(Target) then return true end
+            if Player.Power >= 13 then 
+                RunMacroText("/cast Heroic Strike")
+            value = value - 13
+            end
+        end
+    else
+        local hitCheck = checkOnHit()
+        if hitCheck == "HS" then
+            value = value - 13
+        elseif hitCheck == "CLEAVE" then
+            value = value - 20
         end
     end
+
+    if value > 0 then
+        if Spell.Bloodthirst:IsReady() then
+            Spell.Bloodthirst:Cast(Target)
+        elseif Spell.Whirlwind:IsReady() then
+            Spell.Whirlwind:Cast(Player) 
+        else
+            Spell.Hamstring:Cast(Target)
+        end
+        return true
+    end
+
 end
 
 local function stanceDanceCast(spell, dest, stance)
@@ -411,15 +433,15 @@ function checkOnHit()
     -- end
     for k,v in ipairs(Spell.HeroicStrike.Ranks) do
         if IsCurrentSpell(v) then
-            return true
+            return "HS"
         end
     end
     for k,v in ipairs(Spell.Cleave.Ranks) do
         if IsCurrentSpell(v) then
-            return true
+            return "CLEAVE"
         end
     end
-    return false    
+    return "NA"
 end
 
 local mountedDcheck
@@ -544,7 +566,10 @@ function Warrior.Rotation()
     
     if Setting("abuse") and Player.Combat and Target and not Target.Dead then
         if DMW.Tables.Swing.Player.HasOH then
-            hsQueued = checkOnHit() or abuseOH
+            if checkOnHit() ~= "NA" or abuseOH then
+                hsQueued = true
+            end
+            
             -- print(hsQueued)
             -- for k,v in ipairs(Spell.HeroicStrike.Ranks) do
             --     if IsCurrentSpell(v) then
@@ -721,14 +746,14 @@ function Warrior.Rotation()
                 if Setting("Pummel") and Target and Target:Interrupt() then
                     smartCast("Pummel", Target, true)
                 end
-                if Enemy8YC >= 6 then
-                    if Setting("Whirlwind") and Spell.Whirlwind:CD() <= Player:GCDRemain() + 0.3  then
-                        if smartCast("Whirlwind", Player, true) then return true end
-                    end
-                    if not hsQueued and Player.Power >= 20 then
-                        RunMacroText("/cast Cleave")
-                    end
-                elseif Enemy8YC >= 2 then
+                -- if Enemy8YC >= 6 then
+                --     if Setting("Whirlwind") and Spell.Whirlwind:CD() <= Player:GCDRemain() + 0.3  then
+                --         if smartCast("Whirlwind", Player, true) then return true end
+                --     end
+                --     if not hsQueued and Player.Power >= 20 then
+                --         RunMacroText("/cast Cleave")
+                --     end
+                if Enemy8YC >= 2 then
                     if Setting("Whirlwind") and Spell.Whirlwind:CD() <= Player:GCDRemain() + 0.3  then
                         if smartCast("Whirlwind", Player, true) then return true end
                     end
@@ -797,19 +822,7 @@ function Warrior.Rotation()
                 end
                 bersOnTanking()
                 if Player.Power >= Setting("Rage Dump") then
-                    if not hsQueued then
-                        if EnemyMeleeCount >= 2 and Player.Power >= 20 then
-                            RunMacroText("/cast Cleave")
-                            
-                        else
-                            if Player.Power >= 13 then 
-                                RunMacroText("/cast Heroic Strike")
-                                
-                            end
-                            -- print("MH = "..Player.SwingMH..", OH = "..Player.SwingOH)
-                            
-                        end
-                    end
+                    dumpRage(Player.Power - Setting("Rage Dump"))
                 end
             
             -- if Setting("Berserker Rage") then
