@@ -120,7 +120,7 @@ local function stanceDanceCast(spell, dest, stance)
     if rageLost <= Setting("Rage Lost on stance change") then
         -- print("spell = "..tostring(spell).." , Unit = ".. tostring(dest) .. " , stance = "..tostring(stance))
         -- if Player:StanceGCDRemain() == 0 then
-        if GetShapeshiftFormCooldown(1) == 0 and (stanceChangedSkillTimer == nil or DMW.Time - stanceChangedSkillTimer > 0.3) then
+        if GetShapeshiftFormCooldown(1) == 0 and (stanceChangedSkillTimer == nil or DMW.Time - stanceChangedSkillTimer > 0.5) then
             if stance == 1 then
                 if Spell.StanceBattle:IsReady() then
                     if Spell.StanceBattle:Cast() then 
@@ -355,21 +355,28 @@ end
 -- Execute |cffffffffTarget", 
 -- Execute |cFFFFFF00Disabled"
 local function AutoExecute()
-    if HUD.Execute == 1  then
-        for _,Unit in ipairs(EnemyMelee) do
-            if Unit.HP > 0 and Unit.HP < 20 and not Unit.Dead and Unit.Attackable and Unit.Facing then
-                -- print("exec")
-                local oldTarget = Target and Target.Pointer or false
-                TargetUnit(Unit.Pointer)
-                if smartCast("Execute", Target, true) then return true end
-                -- return true                    
+    if Spell.Execute:IsReady() then
+        if HUD.Execute == 1  then
+            for _,Unit in ipairs(EnemyMelee) do
+                if Unit.HP < 20 and not Unit.Dead then
+                    -- print("exec")
+                    if Target.Pointer ~= Unit.Pointer then
+                        local oldTarget = Target and Target.Pointer or false
+                        TargetUnit(Unit.Pointer)
+                    end
+                    if smartCast("Execute",Target, true) then return true end
+                    if oldTarget then 
+                        TargetUnit(oldTarget); oldTarget = nil 
+                    end
+                    -- return true                    
+                end
             end
-        end
-    elseif HUD.Execute == 2 then
+        elseif HUD.Execute == 2 then
 
-    elseif HUD.Execute == 3 then
-        if Target and Target.HP < 20 and not Target.Dead and Target.Attackable then
-            if smartCast("Execute", Target, true) then return true end
+        elseif HUD.Execute == 3 then
+            if Target and Target.HP < 20 and not Target.Dead and Target.Attackable then
+                if smartCast("Execute", Target, true) then return true end
+            end
         end
     end
 end
@@ -601,7 +608,7 @@ function Warrior.Rotation()
     -- print(addon_data.player.main_swing_timer)
     -- print(overpowerCheck)
     -- if Player.Instance == "party" then
-    if Setting("AutoTarget") and (not Target or not Target.Attackable or Target.Dead or not Target.Facing or IsSpellInRange("Hamstring", "target") == 0) and (targetChange == nil or DMW.Time > targetChange) then
+    if Setting("AutoTarget") and (not Target or not Target.Attackable or Target.Dead or not Target.Facing or IsSpellInRange("Hamstring", "target") == 0)    then
         -- -- print("huy")
         -- local FacingTarget
         -- for _, Unit in ipairs(DMW.Units) do
