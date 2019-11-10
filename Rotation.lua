@@ -7,7 +7,7 @@ local forcedStanceChange = {}
 if stanceChangedSkillTimer == nil then stanceChangedSkillTimer = DMW.Time end
 local stanceCheckBattle = {
     ["Overpower"] = true,
-    -- ["Hamstring"] = true,
+    ["Hamstring"] = true,
     ["MockingBLow"] = true,
     ["Rend"] = true,
     ["Retaliation"] = true,
@@ -360,14 +360,16 @@ local function AutoExecute()
             for _,Unit in ipairs(EnemyMelee) do
                 if Unit.HP < 20 and not Unit.Dead then
                     -- print("exec")
+                    local oldTarget
                     if Target.Pointer ~= Unit.Pointer then
                         local oldTarget = Target and Target.Pointer or false
                         TargetUnit(Unit.Pointer)
                     end
                     if smartCast("Execute",Target, true) then return true end
-                    if oldTarget then 
+                    if oldTarget ~= nil then 
                         TargetUnit(oldTarget); oldTarget = nil 
                     end
+                    return true
                     -- return true                    
                 end
             end
@@ -382,9 +384,9 @@ local function AutoExecute()
 end
 
 local function AutoOverpower()
-    if Setting("Overpower") and Player.Power >= 5 and Spell.Overpower:CD() <= Spell.StanceBattle:CD() and (Stance == "Battle" or Player.Power <= 35) then
+    if Setting("Overpower") and Player.Power >= 5 and Spell.Overpower:CD() <= Spell.StanceBattle:CD() + 0.1 and (Stance == "Battle" or rageLost <= Setting("Rage Lost on stance change")) then
         for _,Unit in ipairs(EnemyMelee) do
-            if Player.OverpowerUnit[Unit.Pointer] ~= nil and Spell.Overpower:CD() < Player.OverpowerUnit[Unit.Pointer].time then
+            if Player.OverpowerUnit[Unit.Pointer] ~= nil and Spell.Overpower:CD() < Player.OverpowerUnit[Unit.Pointer].time - 0.3  then
                 if smartCast("Overpower", Unit, nil) then
                     return true
                 end
@@ -441,10 +443,10 @@ end
 
 local function PvP()
     if Target and Target.Player and Target.Distance <= 3 and not Target.Dead and UnitCanAttack("player", Target.Pointer) then
-        -- if Target.Class == "ROGUE" and not Debuff.Rend:Exist(Target) then
-        --     smartCast("Rend", Target)
-        --     return true
-        -- end 
+        if Target.Class == "ROGUE" and not Debuff.Rend:Exist(Target) then
+            smartCast("Rend", Target)
+            return true
+        end 
         -- if select(2, GetUnitSpeed("target")) >= 7 then
         --     Spell.Hamstring:Cast(Target)
         --     return true
@@ -639,10 +641,12 @@ function Warrior.Rotation()
         --     print("changed face and Target")
         -- end
         if Player.Combat then
-            if Player:AutoTarget(5, true) then
+            if Player:AutoTarget(5, false) then
                 return true
             end
         end
+
+    
     end
     -- end
     if Setting("Stop If Shift") and GetKeyState(0x10) then
@@ -717,7 +721,14 @@ function Warrior.Rotation()
                 if Setting("Pummel") and Target and Target:Interrupt() then
                     smartCast("Pummel", Target, true)
                 end
-                if Enemy8YC >= 3 then
+                if Enemy8YC >= 6 then
+                    if Setting("Whirlwind") and Spell.Whirlwind:CD() <= Player:GCDRemain() + 0.3  then
+                        if smartCast("Whirlwind", Player, true) then return true end
+                    end
+                    if not hsQueued and Player.Power >= 20 then
+                        RunMacroText("/cast Cleave")
+                    end
+                elseif Enemy8YC >= 2 then
                     if Setting("Whirlwind") and Spell.Whirlwind:CD() <= Player:GCDRemain() + 0.3  then
                         if smartCast("Whirlwind", Player, true) then return true end
                     end
