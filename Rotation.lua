@@ -2,7 +2,8 @@ local DMW = DMW
 local Warrior = DMW.Rotations.WARRIOR
 local Rotation = DMW.Helpers.Rotation
 local Setting = DMW.Helpers.Rotation.Setting
-local Player, Buff, Debuff, Spell, Stance, Target, Talent, Item, GCD, CDs, HUD, EnemyMelee, EnemyMeleeCount, Enemy14Y,Enemy14YC, Enemy8Y, Enemy8YC, rageLost, dumpEnabled, castTime, syncSS, combatLeftCheck, forcedStance, stanceChangedSkill, stanceChangedSkillTimer, stanceChangedSkillUnit, targetChange
+local Player, Buff, Debuff, Spell, Stance, Target, Talent, Item, GCD, CDs, HUD, EnemyMelee, EnemyMeleeCount, Enemy14Y,Enemy14YC, Enemy8Y, 
+Enemy8YC, rageLost, dumpEnabled, castTime, syncSS, combatLeftCheck, forcedStance, stanceChangedSkill, stanceChangedSkillTimer, stanceChangedSkillUnit, targetChange, whatIsQueued
 local forcedStanceChange = {}
 if stanceChangedSkillTimer == nil then stanceChangedSkillTimer = DMW.Time end
 local stanceCheckBattle = {
@@ -39,46 +40,7 @@ local stanceCheckBers = {
     ["Execute"] = true
 }
 
-local function Locals()
-    Player = DMW.Player
-    Buff = Player.Buffs
-    Debuff = Player.Debuffs
-    Spell = Player.Spells
-    Talent = Player.Talents
-    Item = Player.Items
-    Target = Player.Target or false
-    HUD = DMW.Settings.profile.HUD
-    CDs = Player:CDs()
-    EnemyMelee, EnemyMeleeCount = Player:GetEnemies(1)
-    Enemy8Y, Enemy8YC = Player:GetEnemies(8)
-    Enemy14Y, Enemy14YC = Player:GetEnemies(14)
-    -- Enemy144Y, Enemy144YC = Player:GetEnemies(144)
-    if select(2,GetShapeshiftFormInfo(1)) then
-        Stance = "Battle"
-    elseif select(2,GetShapeshiftFormInfo(2)) then
-        Stance = "Defense"
-    else
-        Stance = "Bers"
-    end
-    if Setting("Stance") > 1 then
-        if Setting("Stance") == 2 then
-            forcedStance = "Battle"
-        elseif Setting("Stance") == 3 then
-            forcedStance = "Defense"
-        elseif Setting("Stance") == 4 then
-            forcedStance = "Bers"
-        end
-    else
-        forcedStance = nil
-    end
-    if castTime == nil then castTime = DMW.Time end
-    rageLost = Player.Power - Talent.TacticalMastery.Rank*5
-    dumpEnabled = false
-    syncSS = false
-    if Setting("Auto Disable SS") and HUD.Sweeping == 1 and Buff.SweepStrikes:Exist(Player) then DMWHUDSWEEPING:Toggle(2) end
-    -- if combatLeftCheck == nil and Player.CombatLeft > 0 then combatLeftCheck = false end
-    -- print(Player.CombatLeft)
-end
+
 
 local function cancelAAmod()
     if IsCurrentSpell(Spell.Cleave.SpellID) or IsCurrentSpell(Spell.HeroicStrike.SpellID) then
@@ -110,17 +72,17 @@ local function dumpRage(value)
         if EnemyMeleeCount >= 2 and Player.Power >= 20 then
             RunMacroText("/cast Cleave")
             value = value - 20
-        else
-            if Player.Power >= 13 then 
-                RunMacroText("/cast Heroic Strike")
+            DMW.Player.SwingDump = true
+        elseif Player.Power >= 13 then 
+            RunMacroText("/cast Heroic Strike")
             value = value - 13
-            end
+            DMW.Player.SwingDump = true
         end
     else
-        local hitCheck = checkOnHit()
-        if hitCheck == "HS" then
+        
+        if whatIsQueued == "HS" then
             value = value - 13
-        elseif hitCheck == "CLEAVE" then
+        elseif whatIsQueued == "CLEAVE" then
             value = value - 20
         end
     end
@@ -184,11 +146,12 @@ local function tagger()
             for k,v in pairs(DMW.Units) do
                 if v.Name == "High Chief Winterfall" then
                     TargetUnit(v.Pointer)
-                    StartAttack()
+                    
                     if v.Distance <= 5 then
                         Spell.Bloodrage:Cast(Player)
                         Spell.Hamstring:Cast(Target)
                     end
+                    StartAttack()
                     onetime = false
                 end
             end
@@ -476,9 +439,54 @@ local function PvP()
     end
     
 end
- 
+
+local function Locals()
+    Player = DMW.Player
+    Buff = Player.Buffs
+    Debuff = Player.Debuffs
+    Spell = Player.Spells
+    Talent = Player.Talents
+    Item = Player.Items
+    Target = Player.Target or false
+    HUD = DMW.Settings.profile.HUD
+    CDs = Player:CDs()
+    EnemyMelee, EnemyMeleeCount = Player:GetEnemies(0)
+    Enemy8Y, Enemy8YC = Player:GetEnemies(8)
+    Enemy14Y, Enemy14YC = Player:GetEnemies(14)
+    -- Enemy144Y, Enemy144YC = Player:GetEnemies(144)
+    if select(2,GetShapeshiftFormInfo(1)) then
+        Stance = "Battle"
+    elseif select(2,GetShapeshiftFormInfo(2)) then
+        Stance = "Defense"
+    else
+        Stance = "Bers"
+    end
+    if Setting("Stance") > 1 then
+        if Setting("Stance") == 2 then
+            forcedStance = "Battle"
+        elseif Setting("Stance") == 3 then
+            forcedStance = "Defense"
+        elseif Setting("Stance") == 4 then
+            forcedStance = "Bers"
+        end
+    else
+        forcedStance = nil
+    end
+    if castTime == nil then castTime = DMW.Time end
+    rageLost = Player.Power - Talent.TacticalMastery.Rank*5
+    dumpEnabled = false
+    syncSS = false
+    whatIsQueued = checkOnHit()
+    -- print(whatIsQueued)
+    if Setting("Auto Disable SS") and HUD.Sweeping == 1 and Buff.SweepStrikes:Exist(Player) then DMWHUDSWEEPING:Toggle(2) end
+    -- if combatLeftCheck == nil and Player.CombatLeft > 0 then combatLeftCheck = false end
+    -- print(Player.CombatLeft)
+end
+
+
+
 local abuseOH = false
-local hsQueued = false
+local hsQueued
 function Warrior.Rotation()
     Locals()
     -- if itemSets() then return true end
@@ -486,6 +494,7 @@ function Warrior.Rotation()
     -- for _, Unit in pairs(Enemy144Y) do
     -- end
     tagger()
+    
     if PvP() then return true end
     -- questTagger()
     if Setting("BattleStance NoCombat") and Player.CombatLeft then
@@ -564,9 +573,10 @@ function Warrior.Rotation()
     --         end
     -- end
     
-    if Setting("abuse") and Player.Combat and Target and not Target.Dead then
+    if Setting("abuse") and Player.Combat and Target and not Target.Dead and DMW.Player.SwingDump == nil then
         if DMW.Tables.Swing.Player.HasOH then
-            if checkOnHit() ~= "NA" or abuseOH then
+            hsQueued = false
+            if whatIsQueued == "HS" or whatIsQueued == "CLEAVE" or abuseOH then
                 hsQueued = true
             end
             
@@ -585,19 +595,18 @@ function Warrior.Rotation()
                     if EnemyMeleeCount >=2 and Player.Power >= 20 then
                         RunMacroText("/cast Cleave")
                         abuseOH = true
-                        Player.LastHS = DMW.Time
                     else
                         if Player.Power >= 13 then 
                             RunMacroText("/cast Heroic Strike")
-                            abuseOH = true
-                            Player.LastHS = DMW.Time
+                            abuseOH = true 
                         end
                         -- print("MH = "..Player.SwingMH..", OH = "..Player.SwingOH)
                         
                     end
+                    -- print("queued")
                 end
             else
-                if hsQueued and Player.Power < Setting("Rage Dump") then
+                if hsQueued and Player.Power < Setting("Rage Dump")  then
                     -- print("off")
                     SpellStopCasting()
                     
