@@ -22,6 +22,15 @@ function Warrior.Settings()
                 }
             }
         }
+    else
+        UI.HUD.Options = {
+            [1] = {
+                DeathWish = {
+                    [1] = {Text = "DeathWish |cFF00FF00On", Tooltip = ""},
+                    [2] = {Text = "DeathWish |cFFFFFF00Off", Tooltip = ""}
+                }
+            }
+        }
     end
     UI.HUD.Options[2] = {
         Charge = {
@@ -67,7 +76,15 @@ function Warrior.Settings()
     UI.AddHeader("Tank stuff")
         UI.AddToggle("Revenge", nil, false)
         UI.AddRange("SunderArmor ST", "Health limit", 0, 100, 5, 0)
+        UI.AddToggle("SunderArmor", "Applies SunderArmor debuff to Targets", false,true)
+	UI.AddDropdown("Apply # Stacks of Sunder Armor", "Apply # Stacks of Sunder Armor", {"1","2","3","4","5"}, "3")
+
+        UI.AddToggle("MockingBlow", nil, false)
+        UI.AddToggle("Taunt", nil, false)
+        UI.AddToggle("Use ShieldBlock", nil, true)
+        UI.AddRange("Shieldblock HP", nil, 30, 100, 10, 50)
     UI.AddHeader("Debuffs")
+        UI.AddRange("PiercingHowl", "Units count w/o debuff", 0, 10, 1, 0)
         UI.AddRange("ThunderClap", "Units count w/o debuff", 0, 10, 1, 0)
         UI.AddRange("DemoShout", "Units count w/o debuff", 0, 10, 1, 0)
     UI.AddHeader("Experiments")
