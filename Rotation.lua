@@ -50,6 +50,7 @@ local interruptList = {
     ["Polymorph"] = true,
     ["Holy Light"] = true,
     ["Fear"] = true,
+    ["Flame Cannon"] = true,
     ["Renew"] = true  
 }
 local SunderImmune = {
@@ -91,7 +92,7 @@ local function dumpRage(value)
         elseif Player.Power >= 13 then 
             RunMacroText("/cast Heroic Strike")
             value = value - 13
-            print("queued dump hs")
+            -- print("queued dump hs")
             DMW.Player.SwingDump = true
         end
     else
@@ -123,7 +124,7 @@ local function stanceDanceCast(spell, dest, stance)
         -- if Player:StanceGCDRemain() == 0 then
         -- print(spell)
         if GetShapeshiftFormCooldown(1) == 0 and (stanceChangedSkillTimer == nil or DMW.Time - stanceChangedSkillTimer > 0.5) then
-            print(spell)
+            -- print(spell)
             if stance == 1 then
                 if Spell.StanceBattle:IsReady() then
                     if Spell.StanceBattle:Cast() then 
@@ -573,7 +574,7 @@ local function Locals()
     Item = Player.Items
     Target = Player.Target or false
     HUD = DMW.Settings.profile.HUD
-    CDs = Player:CDs()
+    CDs = Player:CDs() and Target.TTD > 5 and Target.Distance < 5
     EnemyMelee, EnemyMeleeCount = Player:GetEnemies(0)
     Enemy8Y, Enemy8YC = Player:GetEnemies(8)
     Enemy14Y, Enemy14YC = Player:GetEnemies(14)
@@ -677,6 +678,8 @@ local function CoolDowns()
         if smartCast("DeathWish", Player, true) then return true end
     elseif Spell.BloodFury:IsReady() and Player.HP > 70 then
         if Spell.BloodFury:Cast(Player) then return true end
+    elseif Spell.BerserkingTroll:IsReady() and Player.HP > 70 then
+        if Spell.BerserkingTroll:Cast(Player) then return true end
     end
 end
 
@@ -722,7 +725,7 @@ function Warrior.Rotation()
         --     end
         -- end
     else
-        if HUD.Charge == 1 and Target and UnitCanAttack("player", Target.Pointer) and not Target.Dead and not UnitPlayerControlled(Target.Pointer) and Target.Distance >= 8 and Target.Distance < 25 and IsSpellInRange("Charge", "target") == 1 and not UnitIsTapDenied(Target.Pointer) then
+        if HUD.Charge == 1 and Target and UnitCanAttack("player", Target.Pointer) and not Target.Dead and Target.Distance >= 8 and Target.Distance < 25 and IsSpellInRange("Charge", "target") == 1 and not UnitIsTapDenied(Target.Pointer) then
             if not Player.Combat and Spell.Charge:CD() == 0 then
                 if smartCast("Charge", Target) then return true end
             elseif Spell.Intercept:CD() == 0 and Player.Power >= 10 and not Spell.Charge:LastCast(1) then
@@ -838,20 +841,22 @@ function Warrior.Rotation()
     if Setting("AutoFaceMelee") then
         if Player.Combat and Target and Target.Distance == 0 and not Target.Facing then
             FaceDirection(Target.Pointer, true)
+            C_Timer.After(0.1, function()
+                FaceDirection(ObjectFacing("player"), true)
+            end)
+        end
+    end
+    
+    if Setting("PiercingHowl") and Setting("PiercingHowl") > 0 and Setting("PiercingHowl") > EnemyMeleeCount then
+        local howlCount = 0
+        for k, Unit in ipairs(EnemyMelee) do
+            if not Debuff.PiercingHowl:Exist(Unit) then howlCount = howlCount + 1 end
+            if howlCount >= Setting("PiercingHowl") then
+                if smartCast("PiercingHowl", Player) then return true end
+            end
         end
     end
 
-
-    -- if Setting("PiercingHowl") then
-    --     local howlCount = 0
-    --     for k, Unit in ipairs(EnemyMelee) do
-    --         if not Debuff.PiercingHowl:Exist(Unit) then howlCount = howlCount + 1 end
-    --     end
-    --     if howlCount >= Setting("PiercingHowl") then
-    --         if Spell.PiercingHowl:Cast(Player) then return true end
-    --     end
-    -- end
-    
     if Setting("DemoShout") and Setting("DemoShout") > 0 and Setting("DemoShout") > EnemyMeleeCount then
         local demoCount = 0
         for k, Unit in ipairs(EnemyMelee) do
@@ -860,7 +865,6 @@ function Warrior.Rotation()
                 if smartCast("DemoShout", Player) then return true end
             end
         end
-        
     end
 
         -- if Target and not Target:IsTanking() then
@@ -917,7 +921,11 @@ function Warrior.Rotation()
     -- end
     -----------------------------------------------fury -------------
     if Setting("Rotation") == 2 or (Target and Target.Player) then
-            if Target and not Target.Dead and Target.Distance <= 5 and Target.Attackable and not IsCurrentSpell(Spell.Attack.SpellID) then
+            if Target and 
+            not Target.Dead and 
+            Target.Distance <= 5 and 
+            Target.Attackable and 
+            not IsCurrentSpell(Spell.Attack.SpellID) then
                 StartAttack()
             end
             if Player.Combat and EnemyMeleeCount > 0 then
@@ -959,7 +967,7 @@ function Warrior.Rotation()
                         -- if Unit:Interrupt() ~= nil then print("123") end
                         local castName = Unit:CastingInfo() 
                         -- print(castName)
-                        if castName ~= nil and interruptList[castName] and Unit:Interrupt() then
+                        if castName ~= nil and (HUD.Interrupts == 1 or interruptList[castName]) and Unit:Interrupt() then
                             -- print(castName)
                             if smartCast("Pummel", Unit, true) then return true end
                         end
@@ -1096,6 +1104,7 @@ function Warrior.Rotation()
             -- end
             
             for k,v in ipairs(EnemyMelee) do
+                -- print(UnitCanAttack("player", v.Pointer))
                 v.Threat = v:UnitThreatSituation(Player)
                 -- print(v.Threat)
 
