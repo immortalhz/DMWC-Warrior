@@ -34,8 +34,9 @@ function Warrior.Settings()
     end
     UI.HUD.Options[2] = {
         Charge = {
-            [1] = {Text = "Charge |cFF00FF00On", Tooltip = ""},
-            [2] = {Text = "Charge |cFFFFFF00Off", Tooltip = ""}
+            [1] = {Text = "Charge |cFF00FF00And interCept", Tooltip = ""},
+            [2] = {Text = "Only |cFFFFFF00interCept", Tooltip = ""},
+            [3] = {Text = "|cFFFFFF0No Moving", Tooltip = ""}
         }
     }
     UI.HUD.Options[3] = {

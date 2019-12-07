@@ -734,13 +734,12 @@ function Warrior.Rotation()
         --     end
         -- end
     else
-        if HUD.Charge == 1 and Target and UnitCanAttack("player", Target.Pointer) and not Target.Dead and Target.Distance >= 8 and Target.Distance < 25 and IsSpellInRange("Charge", "target") == 1 and not UnitIsTapDenied(Target.Pointer) then
-            if not Player.Combat and Spell.Charge:CD() == 0 then
+        if Target and UnitCanAttack("player", Target.Pointer) and not Target.Dead and Target.Distance >= 8 and Target.Distance < 25 and IsSpellInRange("Charge", "target") == 1 and not UnitIsTapDenied(Target.Pointer) then
+            if HUD.Charge == 1 and not Player.Combat and Spell.Charge:CD() == 0 then
                 if smartCast("Charge", Target) then return true end
-            elseif Spell.Intercept:CD() == 0 and Player.Power >= 10 and not Spell.Charge:LastCast(1) then
+            elseif (HUD.Charge == 1 or HUD.Charge == 2) and Spell.Intercept:CD() == 0 and Player.Power >= 10 and not Spell.Charge:LastCast(1) then
                 if smartCast("Intercept", Target) then return true end
             end
-            -- StartAttack()
         end
     end
 
