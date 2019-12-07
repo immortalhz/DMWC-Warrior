@@ -6,6 +6,15 @@ local Player, Buff, Debuff, Spell, Stance, Target, Talent, Item, GCD, CDs, HUD, 
 Enemy8YC, rageLost, dumpEnabled, castTime, syncSS, combatLeftCheck, forcedStance, stanceChangedSkill, stanceChangedSkillTimer, stanceChangedSkillUnit, targetChange, whatIsQueued, oldTarget,GCD
 local forcedStanceChange = {}
 if stanceChangedSkillTimer == nil then stanceChangedSkillTimer = DMW.Time end
+
+hooksecurefunc(DMW.Functions.AuraCache, "Event", function(...)
+    local timeStamp, event, hideCaster, sourceGUID, sourceName, sourceFlags,
+          sourceRaidFlags, destGUID, destName, destFlags, destRaidFlags, spellID, spellName, spellSchool, auraType = ...
+    if event == "SWING_EXTRA_ATTACKS" then
+        print("swing extra")
+    end
+end)
+
 local stanceCheckBattle = {
     ["Bloodthirst"] = true,
     ["Overpower"] = true,
@@ -1134,10 +1143,8 @@ function Warrior.Rotation()
                 end
             end
 
-            if Setting("Use ShieldBlock") and Spell.Revenge:IsReady() and Player.HP < Setting("Shieldblock HP") and Spell.ShieldBlock:Known() and Target and (Target.SwingMH == nil or Target.SwingMH <= 0.5) then
-                if IsEquippedItemType("Shields") then
-                    smartCast("ShieldBlock", Player)
-                end
+            if Setting("Use ShieldBlock") and IsEquippedItemType("Shields") and Spell.Revenge:IsReady() and Player.HP < Setting("Shieldblock HP") and Spell.ShieldBlock:Known() and Target and (Target.SwingMH == nil or Target.SwingMH <= 0.5) then
+                smartCast("ShieldBlock", Player)
             end
             if  AutoExecute() or AutoRevenge() or AutoBuff() or AutoOverpower() then return true end
             -- if Setting("Stance") == 2 and Stance ~= "Defense" then
@@ -1168,7 +1175,7 @@ function Warrior.Rotation()
                 end
             end
  
-            if Spell.ShieldSlam:Known() then
+            if Spell.ShieldSlam:Known() and IsEquippedItemType("Shields") then
                 for k, Unit in ipairs(EnemyMelee) do
                     if smartCast("ShieldSlam",Unit,true) then
                         return true
