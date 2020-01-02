@@ -4,6 +4,7 @@ local Warrior = DMW.Rotations.WARRIOR
 local UI = DMW.UI
 
 function Warrior.Settings()
+    DMW.Helpers.Rotation.CastingCheck = false
     if DMW.Player.Talents.SweepingStrikes.Rank > 0 then
         UI.HUD.Options = {
             [1] = {

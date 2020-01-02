@@ -2,9 +2,10 @@ local DMW = DMW
 local Warrior = DMW.Rotations.WARRIOR
 local Rotation = DMW.Helpers.Rotation
 local Setting = DMW.Helpers.Rotation.Setting
-local Player, Buff, Debuff, Spell, Stance, Target, Talent, Item, GCD, CDs, HUD, EnemyMelee, EnemyMeleeCount, Enemy10Y, Enemy10YC, Enemy8Y,
-      Enemy8YC, rageLost, dumpEnabled, castTime, syncSS, combatLeftCheck, forcedStance, stanceChangedSkill, stanceChangedSkillTimer,
-      stanceChangedSkillUnit, targetChange, whatIsQueued, oldTarget, GCD, rageLostAfterStance, firstCheck, secondCheck, thirdCheck
+local Player, Buff, Debuff, Spell, Stance, Target, Talent, Item, GCD, CDs, HUD, EnemyMelee, EnemyMeleeCount, Enemy10Y, Enemy10YC, Enemy30Y,
+      Enemy30YC, Enemy8Y, Enemy8YC, rageLost, dumpEnabled, castTime, syncSS, combatLeftCheck, forcedStance, stanceChangedSkill,
+      stanceChangedSkillTimer, stanceChangedSkillUnit, targetChange, whatIsQueued, oldTarget, GCD, rageLostAfterStance, firstCheck,
+      secondCheck, thirdCheck
 -- local forcedStanceChange = {}
 -- if stanceChangedSkillTimer == nil then stanceChangedSkillTimer = DMW.Time end
 
@@ -13,11 +14,7 @@ hooksecurefunc(DMW.Functions.AuraCache, "Event", function(...)
           spellID, spellName, spellSchool, auraType = ...
     if event == "SWING_EXTRA_ATTACKS" then print("swing extra") end
 end)
-local stanceNumber = {
-    [1] = "Battle",
-    [2] = "Defensive",
-    [3] = "Berserk"
-}
+local stanceNumber = {[1] = "Battle", [2] = "Defensive", [3] = "Berserk"}
 
 local stanceCheck = {
     Battle = {
@@ -119,11 +116,17 @@ local function dumpRage(value)
     end
 
     if value > 0 then
-        if Setting("Rotation") ~= 4 then
+        if Setting("Rotation") ~= 4 and Target then
             if Setting("MS/BT") and Spell.Bloodthirst:IsReady() then
                 Spell.Bloodthirst:Cast(Target)
             elseif Setting("Whirlwind") and Spell.Whirlwind:IsReady() then
                 Spell.Whirlwind:Cast(Player)
+            elseif Setting("Slam Dump") and DMW.Player.SwingMH <= 1 then
+                if not Target.Facing then
+                    FaceDirection(Target.Pointer, true)
+                end
+                -- print("slam")
+                RunMacro("slam")
             else
                 Spell.Hamstring:Cast(Target)
             end
@@ -265,11 +268,7 @@ end
 --     end
 -- end
 
-local function forcedStanceChange(spell)
-    if forcedStance and stanceCheck[forcedStance] then
-
-    end
-end
+local function forcedStanceChange(spell) if forcedStance and stanceCheck[forcedStance] then end end
 
 local function smartCast(spell, Unit, pool)
     -- if spell == "cleavehs" then
@@ -297,48 +296,26 @@ local function smartCast(spell, Unit, pool)
         -- if forcedStance then if forceStance(spell) then return true end end
 
         if Setting("Rotation") == 2 then
-            if Stance == "Berserk" then
-                if stanceCheck["Berserk"][spell] then
+            if stanceCheck[firstCheck][spell] then
+                if Stance == firstCheck then
                     if Spell[spell]:Cast(Unit) then return true end
                 else
-                    if stanceCheck["Battle"][spell] then
-                        -- print(spell)
-                        if stanceDanceCast(spell, Unit, 1) then return true end
-                    elseif stanceCheck["Defensive"][spell] then
-                        -- print(spell)
-                        if stanceDanceCast(spell, Unit, 2) then return true end
-                    else
-                        if Spell[spell]:Cast(Unit) then return true end
-                    end
+                    if stanceDanceCast(spell, Unit, firstCheck) then return true end
                 end
-            elseif Stance == "Battle" then
-                if stanceCheck["Battle"][spell] then
+            elseif stanceCheck[secondCheck][spell] then
+                if Stance == secondCheck then
                     if Spell[spell]:Cast(Unit) then return true end
                 else
-                    if stanceCheck["Berserk"][spell] then
-                        -- print(spell)
-                        if stanceDanceCast(spell, Unit, 3) then return true end
-                    elseif stanceCheck["Defensive"][spell] then
-                        -- print(spell)
-                        if stanceDanceCast(spell, Unit, 2) then return true end
-                    else
-                        if Spell[spell]:Cast(Unit) then return true end
-                    end
+                    if stanceDanceCast(spell, Unit, secondCheck) then return true end
                 end
-            elseif Stance == "Defensive" then
-                if stanceCheck["Defensive"][spell] then
+            elseif stanceCheck[thirdCheck][spell] then
+                if Stance == thirdCheck then
                     if Spell[spell]:Cast(Unit) then return true end
                 else
-                    if stanceCheck["Battle"][spell] then
-                        -- print(spell)
-                        if stanceDanceCast(spell, Unit, 1) then return true end
-                    elseif stanceCheck["Berserk"][spell] then
-                        -- print(spell)
-                        if stanceDanceCast(spell, Unit, 3) then return true end
-                    else
-                        if Spell[spell]:Cast(Unit) then return true end
-                    end
+                    if stanceDanceCast(spell, Unit, thirdCheck) then return true end
                 end
+            else
+                if Spell[spell]:Cast(Unit) then return true end
             end
         elseif Setting("Rotation") == 1 or Setting("Rotation") == 4 then
 
@@ -361,6 +338,8 @@ local function smartCast(spell, Unit, pool)
                 else
                     if stanceDanceCast(spell, Unit, thirdCheck) then return true end
                 end
+            else
+                if Spell[spell]:Cast(Unit) then return true end
             end
             -- if Stance == "Defensive" then
             --     if stanceCheck["Defensive"][spell] then
@@ -412,7 +391,7 @@ local function smartCast(spell, Unit, pool)
             --     end
             -- end
         end
-        if pool and Spell[spell]:CD() <= GCD + 0.3 then return true end
+        if pool and Spell[spell]:CD() <= 1.5 then return true end
     end
 end
 
@@ -565,6 +544,7 @@ local function Locals()
     EnemyMelee, EnemyMeleeCount = Player:GetEnemies(0)
     Enemy8Y, Enemy8YC = Player:GetEnemies(8)
     Enemy10Y, Enemy10YC = Player:GetEnemies(10)
+    Enemy30Y, Enemy30YC = Player:GetEnemies(30)
 
     GCD = Player:GCDRemain()
     if select(2, GetShapeshiftFormInfo(1)) then
@@ -799,10 +779,19 @@ function Warrior.Rotation()
                     -- if Setting("Cleave")  then
                     --     if smartCast("Cleave", Player, true) then return true end
                     -- end
-                    if Setting("MS/BT") and (Spell.Whirlwind:CD() >= 4 or Player.Power >= 45) then
-                        if smartCast("Bloodthirst", Target, true) then return true end
+                    if Setting("Slam Dump") then
+                        if not Target.Facing then
+                            FaceDirection(Target.Pointer, true)
+                        end
+                        -- print("slam")
+                        if DMW.Player.SwingMH <= 1 and Player.Power >= 15 then
+                            RunMacro("slam")
+                        end
+                    else
+                        if Setting("MS/BT") and (Spell.Whirlwind:CD() >= 4 or Player.Power >= 45) then
+                            if smartCast("Bloodthirst", Target, true) then return true end
+                        end
                     end
-                    AbuseHS()
                 else
                     if Setting("SunderArmor ST") and Target.HP > Setting("SunderArmor ST") then
                         -- if Setting("MS/BT") then if smartCast("Bloodthirst", Target, true) then return true end end
@@ -811,19 +800,30 @@ function Warrior.Rotation()
                         end
                     end
 
-                    if Setting("MS/BT") then
-                        -- if Player.Power < 30 and not Buff.Flurry:Exist(Player) then
-                        --     if AutoOverpower() then return true end
-                        -- end
-                        if smartCast("Bloodthirst", Target, true) then return true end
+                    if Setting("Slam Dump") then
+                        if not Target.Facing then
+                            FaceDirection(Target.Pointer, true)
+                        end
+                        if DMW.Player.SwingMH <= 1 and Player.Power >= 15 then
+                            RunMacro("slam")
+                        end
+                    else
+                        if Setting("MS/BT") then
+                            -- if Player.Power < 30 and not Buff.Flurry:Exist(Player) then
+                            --     if AutoOverpower() then return true end
+                            -- end
+                            if smartCast("Bloodthirst", Target, true) then return true end
+                        end
+                        if Setting("Whirlwind") and (Spell.Bloodthirst:CD() >= 4 or Player.Power >= 45) then
+                            if smartCast("Whirlwind", Player) then return true end
+                        end
                     end
 
                     -- if AutoOverpower() then return true end
-                    if Setting("Whirlwind") and (Spell.Bloodthirst:CD() >= 4 or Player.Power >= 45) then
-                        if smartCast("Whirlwind", Player, nil) then return true end
-                    end
-                    AbuseHS()
+
+
                 end
+                AbuseHS()
                 if Player.Power >= Setting("Rage Dump") then
                     if dumpRage(Player.Power - Setting("Rage Dump")) then return true end
                 end
@@ -838,55 +838,41 @@ function Warrior.Rotation()
 
         if Player.Combat then
             -- EnemyMelee Threat Sorting
-            for _, v in ipairs(EnemyMelee) do
+            for _, v in ipairs(Enemy30Y) do
                 v.Threat = v:UnitThreatSituation()
                 v.SelfThreat = select(5, v:UnitDetailedThreatSituation())
                 -- v.ThreatTa
-                local highestValue
+                -- local highestValue
                 for k, Friend in pairs(DMW.Friends.Units) do
-                    local FriendThreat = select(5, v:UnitDetailedThreatSituation(Friend)) or 0
-                    if highestValue == nil or highestValue < FriendThreat then highestValue = FriendThreat end
+                    if Friend.Name ~= "LocalPlayer" then
+                        local FriendThreat = select(5, v:UnitDetailedThreatSituation(Friend)) or 0
+                        if v.highestValue == nil or v.highestValue < FriendThreat then v.highestValue = FriendThreat end
+                    end
                 end
-                if highestValue then v.threatDelta = v.SelfThreat - highestValue end
-                -- for i = 1, 4 do
-                --     local unit = "party"..i
-                --     if UnitExists(unit) then
-                --         for _, k in pairs(DMW.Friends.Units) do
-                --             local unitthreat
-                --             if UnitGUID(unit) == k.GUID then
-                --                 unitthreat = select(5, v:UnitDetailedThreatSituation(k)) or 0
-                --                 -- tinsert(threat, unitthreat)
-                --             end
-                --             if unitthreat and (highestValue == nil or unitthreat > highestValue) then
-                --                 highestValue = unitthreat
-                --             end
-                --         end
-                --     end
-                -- end
-                -- local highest = max(unpack(threat))
-                -- if highestValue then v.threatDelta = select(5, v:UnitDetailedThreatSituation()) - highestValue end
+                if v.highestValue then v.threatDelta = v.SelfThreat - v.highestValue end
                 if v.Target and UnitName(v.Target) == "Saaulgoodman" then
-                    print("force!!1!!")
+                    -- print("force!!1!!")
                     v.ForceSort = true
+                    v:CustomTarget()
                 else
                     v.ForceSort = false
                 end
             end
-            for _, v in ipairs(EnemyMelee) do end
-            if EnemyMeleeCount >= 2 then
-                table.sort(EnemyMelee, function(x, y) return x.threatDelta < y.threatDelta end)
-                table.sort(EnemyMelee, function(x) return x.Classification == "Elite" end)
-                table.sort(EnemyMelee, function(x) return x.ForceSort end)
+            -- for _, v in ipairs(EnemyMelee) do end
+            if Enemy30YC >= 2 then
+                table.sort(Enemy30Y, function(x, y) return x.threatDelta < y.threatDelta end)
+                -- table.sort(Enemy30Y, function(x) if x.Classification ~= "Normal" then return true else return false end end)
+                -- table.sort(Enemy30Y, function(x) if x.ForceSort then return true else return false end end)
                 if Setting("AutoTreatTarget") then
-                    -- if EnemyMelee[1] then EnemyMelee[1]:CustomTarget() end
-                    for i = 1, #EnemyMelee do if EnemyMelee[i].threatDelta <= 500 then EnemyMelee[i]:CustomTarget() end end
+                    -- if Enemy30Y[1] then Enemy30Y[1]:CustomTarget() end
+                    for i = 1, #Enemy30Y do if Enemy30Y[i].threatDelta <= 500 then Enemy30Y[i]:CustomTarget() end end
                 end
             end
 
             if Setting("Taunt") or Setting("MockingBlow") then
                 for _, Unit in ipairs(EnemyMelee) do
                     -- if not Unit:UnitDetailedThreatSituation(Player) then
-                    if Unit.Threat <= 1 then
+                    if Unit.Threat <= 1 and Unit.highestValue and Unit.highestValue > 0 then
                         -- Taunt --
                         if Setting("Taunt") and Spell.Taunt:Known() and Spell.Taunt:CD() == 0 and not Unit:AuraByID(7922) and
                             not Unit:AuraByID(20560) and not Unit:AuraByID(355) then
