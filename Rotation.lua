@@ -893,7 +893,11 @@ function Warrior.Rotation()
                         if v.highestValue == nil or v.highestValue < FriendThreat then v.highestValue = FriendThreat end
                     end
                 end
-                if v.highestValue then v.threatDelta = v.SelfThreat - v.highestValue end
+                if v.highestValue then
+                     v.threatDelta = v.SelfThreat - v.highestValue
+                else
+                    v.threatDelta = 0
+                end
                 if v.Target and UnitName(v.Target) == "Saaulgoodman" then
                     -- print("force!!1!!")
                     v.ForceSort = true
