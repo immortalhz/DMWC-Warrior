@@ -12,7 +12,13 @@ local Player, Buff, Debuff, Spell, Stance, Target, Talent, Item, GCD, CDs, HUD, 
 hooksecurefunc(DMW.Functions.AuraCache, "Event", function(...)
     local timeStamp, event, hideCaster, sourceGUID, sourceName, sourceFlags, sourceRaidFlags, destGUID, destName, destFlags, destRaidFlags,
           spellID, spellName, spellSchool, auraType = ...
-    if event == "SWING_EXTRA_ATTACKS" then print("swing extra") end
+    -- if event == "SPELL_EXTRA_ATTACKS" then print("swing extra") end
+    if event == "SPELL_EXTRA_ATTACKS" and sourceGUID == Player.GUID then
+        RunMacro("aastop")
+        RunMacro("aastop")
+        RunMacro("aastop")
+        print("proc hoj")
+    end
 end)
 local stanceNumber = {[1] = "Battle", [2] = "Defensive", [3] = "Berserk"}
 
@@ -94,7 +100,7 @@ local function dumpRage(value)
     -- elseif value >= 15 then
     --     if Spell.Slam:Cast(Target) then return true end
     -- else
-    if whatIsQueued == "NA" and not Setting("Slam Dump") then
+    if whatIsQueued == "NA" and Setting("Rotation") ~= 3 then
         if Setting("Rotaton") == 2 and EnemyMeleeCount >= 2 and Player.Power >= 20 then
             RunMacroText("/cast Cleave")
             value = value - 20
@@ -116,17 +122,11 @@ local function dumpRage(value)
     end
 
     if value > 0 then
-        if Setting("Rotation") ~= 4 and Target then
+        if Setting("Rotation") ~= 6 and Target then
             if Setting("MS/BT") and Spell.Bloodthirst:IsReady() then
                 Spell.Bloodthirst:Cast(Target)
             elseif Setting("Whirlwind") and Spell.Whirlwind:IsReady() then
                 Spell.Whirlwind:Cast(Player)
-            elseif Setting("Slam Dump") and DMW.Player.SwingMH <= 1 then
-                if not Target.Facing then
-                    FaceDirection(Target.Pointer, true)
-                end
-                -- print("slam")
-                RunMacro("slam")
             else
                 Spell.Hamstring:Cast(Target)
             end
@@ -669,7 +669,17 @@ local function StanceChangedSpell()
         return true
     end
 end
-local chargeTimer, chargeUnit
+
+local function getSlamTimer()
+    local atkSpeed = UnitAttackSpeed("player")
+    local latency = (select(4, GetNetStats()) / 1000) or 0
+    local slamPoints = 5
+    local slamSpeed = 1.5 - (0.1 * slamPoints)
+    local tick = 1 - (slamSpeed + latency) / atkSpeed
+    return tick
+end
+
+local SlamTime
 function Warrior.Rotation()
     Locals()
     -- if Player.Combat and DMW.Time - DMW.Player.SwingUpdate > 5 then print("bugged") end
@@ -691,7 +701,7 @@ function Warrior.Rotation()
             end
         end
     end
-    if Setting("Rotation") ~= 4 then
+    if Setting("Rotation") ~= 6 then
         if Setting("Assist Use") then
             --------------------------------------FOR OFFPARTY charge--------------------------------------------------------------------
             if HUD.Charge == 1 and Target and not UnitPlayerControlled(Target.Pointer) and Target.Distance >= 8 and Target.Distance < 25 and
@@ -774,19 +784,15 @@ function Warrior.Rotation()
             end
             if Target then
                 if Enemy8YC >= 2 then
-                    if Setting("Whirlwind") then if smartCast("Whirlwind", Player, true) then return true end end
+                    if Setting("Whirlwind") then if smartCast("Whirlwind", Player) then return true end end
 
                     -- if Setting("Cleave")  then
                     --     if smartCast("Cleave", Player, true) then return true end
                     -- end
                     if Setting("Slam Dump") then
-                        if not Target.Facing then
-                            FaceDirection(Target.Pointer, true)
-                        end
+                        if not Target.Facing then FaceDirection(Target.Pointer, true) end
                         -- print("slam")
-                        if DMW.Player.SwingMH <= 1 and Player.Power >= 15 then
-                            RunMacro("slam")
-                        end
+                        if DMW.Player.SwingMH <= 1 and Player.Power >= 15 then RunMacro("slam") end
                     else
                         if Setting("MS/BT") and (Spell.Whirlwind:CD() >= 4 or Player.Power >= 45) then
                             if smartCast("Bloodthirst", Target, true) then return true end
@@ -801,12 +807,8 @@ function Warrior.Rotation()
                     end
 
                     if Setting("Slam Dump") then
-                        if not Target.Facing then
-                            FaceDirection(Target.Pointer, true)
-                        end
-                        if DMW.Player.SwingMH <= 1 and Player.Power >= 15 then
-                            RunMacro("slam")
-                        end
+                        if not Target.Facing then FaceDirection(Target.Pointer, true) end
+                        if DMW.Player.SwingMH <= 1 and Player.Power >= 15 then RunMacro("slam") end
                     else
                         if Setting("MS/BT") then
                             -- if Player.Power < 30 and not Buff.Flurry:Exist(Player) then
@@ -821,11 +823,53 @@ function Warrior.Rotation()
 
                     -- if AutoOverpower() then return true end
 
-
                 end
                 AbuseHS()
                 if Player.Power >= Setting("Rage Dump") then
                     if dumpRage(Player.Power - Setting("Rage Dump")) then return true end
+                end
+            end
+            bersOnTanking()
+        end -- combat
+    elseif Setting("Rotation") == 3 then
+
+        if Target and not Target.Dead and Target.Distance <= 5 and Target.Attackable and not IsCurrentSpell(Spell.Attack.SpellID) then
+            StartAttack()
+        end
+        if Player.Combat then
+            if AutoBuff() or AutoOverpower() or AutoExecute() then return true end
+            if HUD.DeathWish == 1 and Target and Target.TTD >= 7 then if CoolDowns() then return true end end
+            if Setting("Pummel") then
+                for _, Unit in ipairs(EnemyMelee) do
+                    local castName = Unit:CastingInfo()
+                    if castName ~= nil and (HUD.Interrupts == 1 or interruptList[castName]) and Unit:Interrupt() then
+                        if smartCast("Pummel", Unit, true) then return true end
+                    end
+                end
+            end
+            if Target then
+                -- if Target.ValidEnemy then
+                    if Enemy8YC >= 2 and Setting("Whirlwind") and Player.Power >= 40 then
+                        if smartCast("Whirlwind", Player) then return true end
+                    end
+                    if Setting("MS/BT") and Player.Power >= 45 then
+                        if smartCast("Bloodthirst", Target) then return true end
+                    end
+                    if Spell.Slam:IsReady() and not Player.Moving and CastingInfo() == nil and Player.SwingMH <= 1 and Player.SwingMH > 0.5 and (SlamTime == nil or DMW.Time - SlamTime >= 1) then
+                        if not Target.Facing then FaceDirection(Target.Pointer, true) end
+                        print(DMW.Time)
+                        RunMacro("slam")
+                        SlamTime = DMW.Time
+                    end
+                -- end
+                if Player.Power >= 70 then
+                    if whatIsQueued == "NA" then
+                        if EnemyMeleeCount >= 2 then
+                            RunMacroText("/cast Cleave")
+                        else
+                            RunMacroText("/cast Heroic Strike")
+                        end
+                    end
                 end
             end
             bersOnTanking()
