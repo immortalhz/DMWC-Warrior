@@ -3,25 +3,32 @@ local Warrior = DMW.Rotations.WARRIOR
 local Rotation = DMW.Helpers.Rotation
 local Setting = DMW.Helpers.Rotation.Setting
 local Player, Buff, Debuff, Spell, Stance, Target, Talent, Item, GCD, CDs, HUD, EnemyMelee, EnemyMeleeCount, Enemy10Y, Enemy10YC, Enemy30Y,
-      Enemy30YC, Enemy8Y, Enemy8YC, rageLost, dumpEnabled, castTime, syncSS, combatLeftCheck, forcedStance, stanceChangedSkill,
-      stanceChangedSkillTimer, stanceChangedSkillUnit, targetChange, whatIsQueued, oldTarget, GCD, rageLostAfterStance, firstCheck,
-      secondCheck, thirdCheck
--- local forcedStanceChange = {}
+      Enemy30YC, Enemy8Y, Enemy8YC, rageLost, dumpEnabled, castTime, syncSS, combatLeftCheck, stanceChangedSkill,
+      stanceChangedSkillTimer, stanceChangedSkillUnit, targetChange, whatIsQueued, oldTarget, rageLostAfterStance, firstCheck,
+      secondCheck, thirdCheck, mainSwing, ohSwing, mainSpeed
 -- if stanceChangedSkillTimer == nil then stanceChangedSkillTimer = DMW.Time end
 
 hooksecurefunc(DMW.Functions.AuraCache, "Event", function(...)
     local timeStamp, event, hideCaster, sourceGUID, sourceName, sourceFlags, sourceRaidFlags, destGUID, destName, destFlags, destRaidFlags,
           spellID, spellName, spellSchool, auraType = ...
     -- if event == "SPELL_EXTRA_ATTACKS" then print("swing extra") end
-    if event == "SPELL_EXTRA_ATTACKS" and sourceGUID == Player.GUID then
-        RunMacro("aastop")
-        RunMacro("aastop")
-        RunMacro("aastop")
+    -- 15601,"Hand of Justice"
+    if event == "SPELL_EXTRA_ATTACKS" and sourceGUID == DMW.Player.GUID then
+        -- RunMacro("aastop")
         print("proc hoj")
     end
 end)
 local stanceNumber = {[1] = "Battle", [2] = "Defensive", [3] = "Berserk"}
 
+local debugItem
+local function Debug(item, value)
+    if Setting("Debug") then
+        if debugItem ~= arg then
+            print(arg)
+            debugItem = arg
+        end
+    end
+end
 local stanceCheck = {
     Battle = {
         ["Bloodthirst"] = true,
@@ -82,10 +89,20 @@ local function cancelAAmod()
     if IsCurrentSpell(Spell.Cleave.SpellID) or IsCurrentSpell(Spell.HeroicStrike.SpellID) then SpellStopCasting() end
 end
 
+local function GetUnitArmor(unit, dmg, calc)
+    local reduction
+    local enemy = unit.Level
+    local reduction = dmg / calc
+    -- Armor = Reduction * ((85 * enemy) + 400) / (100 -  reduction)
+    -- Reduction / 100 * ([467.5 * Enemy_Level] + Armor - 22167.5) = Armor
+    -- 1 to 59	DR% = Armour / (Armour + 400 + (85*attacker level))
+    -- 60+	DR% = Armour / (Armour + 400 + 85*(attacker level + 4.5*(attacker level-59)))
+end
+
 local function dumpStart() return Player.Power >= Setting("Rage Dump") or dumpEnabled end
 
 local function dumpRage(value)
-    local value = value
+    Debug("dumprage "..value)
     -- print(value)
     -- if value >= 30 then
     --     if Spell.MortalStrike:Cast(Target) then return true end
@@ -141,47 +158,30 @@ end
 
 local function stanceDanceCast(spell, dest, stance)
     if rageLost <= Setting("Rage Lost on stance change") then
-        -- print(spell.."     " .. stance)
-        -- print("spell = "..tostring(spell).." , Unit = ".. tostring(dest) .. " , stance = "..tostring(stance))
-        -- if Player:StanceGCDRemain() == 0 then
-        -- print(spell)
         if GetShapeshiftFormCooldown(1) == 0 and not stanceChangedSkill and Player.Power >= Spell[spell]:Cost() and Spell[spell]:CD() <= 0.3 then
-            -- print(spell)
             if stance == "Battle" then
-                -- if Spell.StanceBattle:IsReady() then
                 if Spell.StanceBattle:Cast() then
                     stanceChangedSkill = spell
                     stanceChangedSkillTimer = DMW.Time
                     stanceChangedSkillUnit = dest
-                    -- forcedStanceChange[spell] = {}
-                    -- forcedStanceChange[spell].time = DMW.Time
                 end
-                -- end
             elseif stance == "Defensive" then
-                -- if Spell.StanceDefense:IsReady() then
                 if Spell.StanceDefense:Cast() then
                     stanceChangedSkill = spell
                     stanceChangedSkillTimer = DMW.Time
                     stanceChangedSkillUnit = dest
-                    -- forcedStanceChange[spell] = {}
-                    -- forcedStanceChange[spell].time = DMW.Time
                 end
-                -- end
             elseif stance == "Berserk" then
-                -- if Spell.StanceBers:IsReady() then
                 if Spell.StanceBers:Cast() then
                     stanceChangedSkill = spell
                     stanceChangedSkillTimer = DMW.Time
                     stanceChangedSkillUnit = dest
-                    -- forcedStanceChange[spell] = {}
-                    -- forcedStanceChange[spell].time = DMW.Time
                 end
-                -- end
             end
         end
     else
-        dumpRage(rageLost)
 
+        dumpRage(rageLost)
     end
     return true
 end
@@ -193,7 +193,6 @@ local function tagger()
             for k, v in pairs(DMW.Units) do
                 if v.Name == "High Chief Winterfall" then
                     TargetUnit(v.Pointer)
-
                     if v.Distance <= 5 then
                         Spell.Bloodrage:Cast(Player)
                         Spell.Hamstring:Cast(Target)
@@ -222,11 +221,12 @@ local function questTagger()
     end
 end
 
-local function dpsAA()
+function dpsAA()
     local minDamage, maxDamage, minOffHandDamage, maxOffHandDamage = UnitDamage("player")
     local speed, offhandSpeed = UnitAttackSpeed("player")
-    local apGain = UnitAttackPower("player") / 14
-    return ((maxDamage + minDamage) / 2 / speed) + apGain
+    local apGain, be, ze = UnitAttackPower("player")
+    -- return ((maxDamage + minDamage) / 2 / speed) + apGain
+    return (maxDamage + minDamage) / 2 - 3.4 * (apGain + be + ze)/ 14
 end
 local function timeToCost(value)
     -- return Spell[spell].Cost()
@@ -241,34 +241,6 @@ local function regularCast(spell, Unit, pool)
     if pool and Spell[spell]:Cost() > Player.Power then return true end
     if Spell[spell]:Cast(Unit) then return true end
 end
-
--- local function forceStance(spell)
---     if forcedStance and forcedStance ~= Stance then
---         if forcedStance == "Bers" and (stanceCheck["Bers"][spell] or (stanceCheck["Battle"][spell] == nil and stanceCheck["Defence"][spell] == nil)) then
---             if Spell.StanceBers:IsReady() then
---                 Spell.StanceBers:Cast()
---             else
---                 return true
---             end
---         elseif forcedStance == "Defense" and
---             (stanceCheck["Defence"][spell] or (stanceCheck["Battle"][spell] == nil and stanceCheck["Bers"][spell] == nil)) then
---             if Spell.StanceDefense:IsReady() then
---                 Spell.StanceDefense:Cast()
---             else
---                 return true
---             end
---         elseif forcedStance == "Battle" and
---             (stanceCheck["Battle"][spell] or (stanceCheck["Bers"][spell] == nil and stanceCheck["Defence"][spell] == nil)) then
---             if Spell.StanceBattle:IsReady() then
---                 Spell.StanceBattle:Cast()
---             else
---                 return true
---             end
---         end
---     end
--- end
-
-local function forcedStanceChange(spell) if forcedStance and stanceCheck[forcedStance] then end end
 
 local function smartCast(spell, Unit, pool)
     -- if spell == "cleavehs" then
@@ -286,6 +258,12 @@ local function smartCast(spell, Unit, pool)
         if spell == "SweepStrikes" and Stance ~= "Battle" then
             if Spell.StanceBattle:IsReady() then
                 Spell.StanceBattle:Cast()
+            else
+                return true
+            end
+        elseif spell == "Bloodthirst" and Stance ~= "Berserker" then
+            if Spell.StanceBers:IsReady() then
+                Spell.StanceBers:Cast()
             else
                 return true
             end
@@ -318,7 +296,6 @@ local function smartCast(spell, Unit, pool)
                 if Spell[spell]:Cast(Unit) then return true end
             end
         elseif Setting("Rotation") == 1 or Setting("Rotation") == 4 then
-
             -- print(firstCheck)
             if stanceCheck[firstCheck][spell] then
                 if Stance == firstCheck then
@@ -546,6 +523,7 @@ local function Locals()
     Enemy10Y, Enemy10YC = Player:GetEnemies(10)
     Enemy30Y, Enemy30YC = Player:GetEnemies(30)
 
+    mainSwing, mainSpeed = Player:GetSwing("main")
     GCD = Player:GCDRemain()
     if select(2, GetShapeshiftFormInfo(1)) then
         Stance = "Battle"
@@ -557,17 +535,6 @@ local function Locals()
     firstCheck = stanceNumber[Setting("First check Stance")]
     secondCheck = stanceNumber[Setting("Second check Stance")]
     thirdCheck = stanceNumber[Setting("Third check Stance")]
-    if Setting("Stance") > 1 then
-        if Setting("Stance") == 2 then
-            forcedStance = "Battle"
-        elseif Setting("Stance") == 3 then
-            forcedStance = "Defense"
-        elseif Setting("Stance") == 4 then
-            forcedStance = "Bers"
-        end
-    else
-        forcedStance = nil
-    end
     if castTime == nil then castTime = DMW.Time end
     rageLostAfterStance = Talent.TacticalMastery.Rank * 5
     rageLost = Player.Power - rageLostAfterStance
@@ -670,16 +637,16 @@ local function StanceChangedSpell()
     end
 end
 
-local function getSlamTimer()
+local function CanSlam()
     local atkSpeed = UnitAttackSpeed("player")
     local latency = (select(4, GetNetStats()) / 1000) or 0
-    local slamPoints = 5
+    local slamPoints = 0
     local slamSpeed = 1.5 - (0.1 * slamPoints)
-    local tick = 1 - (slamSpeed + latency) / atkSpeed
-    return tick
+    local tick = (slamSpeed + latency) / atkSpeed
+    -- print(mai)
+    return mainSwing <= slamSpeed + latency and mainSwing > 0.9
 end
 
-local SlamTime
 function Warrior.Rotation()
     Locals()
     -- if Player.Combat and DMW.Time - DMW.Player.SwingUpdate > 5 then print("bugged") end
@@ -765,121 +732,13 @@ function Warrior.Rotation()
             if demoCount >= Setting("DemoShout") then if smartCast("DemoShout", Player) then return true end end
         end
     end
-
-    -----------------------------------------------fury -------------
-    if Setting("Rotation") == 2 or (Target and Target.Player) then
-        if Target and not Target.Dead and Target.Distance <= 5 and Target.Attackable and not IsCurrentSpell(Spell.Attack.SpellID) then
-            StartAttack()
-        end
-        if Player.Combat and EnemyMeleeCount > 0 then
-            if AutoBuff() or AutoOverpower() or AutoExecute() then return true end
-            if HUD.DeathWish == 1 and Target and Target.TTD >= 7 then if CoolDowns() then return true end end
-            if Setting("Pummel") then
-                for _, Unit in ipairs(EnemyMelee) do
-                    local castName = Unit:CastingInfo()
-                    if castName ~= nil and (HUD.Interrupts == 1 or interruptList[castName]) and Unit:Interrupt() then
-                        if smartCast("Pummel", Unit, true) then return true end
-                    end
-                end
-            end
-            if Target then
-                if Enemy8YC >= 2 then
-                    if Setting("Whirlwind") then if smartCast("Whirlwind", Player) then return true end end
-
-                    -- if Setting("Cleave")  then
-                    --     if smartCast("Cleave", Player, true) then return true end
-                    -- end
-                    if Setting("Slam Dump") then
-                        if not Target.Facing then FaceDirection(Target.Pointer, true) end
-                        -- print("slam")
-                        if DMW.Player.SwingMH <= 1 and Player.Power >= 15 then RunMacro("slam") end
-                    else
-                        if Setting("MS/BT") and (Spell.Whirlwind:CD() >= 4 or Player.Power >= 45) then
-                            if smartCast("Bloodthirst", Target, true) then return true end
-                        end
-                    end
-                else
-                    if Setting("SunderArmor ST") and Target.HP > Setting("SunderArmor ST") then
-                        -- if Setting("MS/BT") then if smartCast("Bloodthirst", Target, true) then return true end end
-                        if Debuff.SunderArmor:Stacks(Target) < 5 or Debuff.SunderArmor:Refresh(Target) then
-                            if smartCast("SunderArmor", Target, true) then return true end
-                        end
-                    end
-
-                    if Setting("Slam Dump") then
-                        if not Target.Facing then FaceDirection(Target.Pointer, true) end
-                        if DMW.Player.SwingMH <= 1 and Player.Power >= 15 then RunMacro("slam") end
-                    else
-                        if Setting("MS/BT") then
-                            -- if Player.Power < 30 and not Buff.Flurry:Exist(Player) then
-                            --     if AutoOverpower() then return true end
-                            -- end
-                            if smartCast("Bloodthirst", Target, true) then return true end
-                        end
-                        if Setting("Whirlwind") and (Spell.Bloodthirst:CD() >= 4 or Player.Power >= 45) then
-                            if smartCast("Whirlwind", Player) then return true end
-                        end
-                    end
-
-                    -- if AutoOverpower() then return true end
-
-                end
-                AbuseHS()
-                if Player.Power >= Setting("Rage Dump") then
-                    if dumpRage(Player.Power - Setting("Rage Dump")) then return true end
-                end
-            end
-            bersOnTanking()
-        end -- combat
-    elseif Setting("Rotation") == 3 then
-
-        if Target and not Target.Dead and Target.Distance <= 5 and Target.Attackable and not IsCurrentSpell(Spell.Attack.SpellID) then
-            StartAttack()
-        end
-        if Player.Combat then
-            if AutoBuff() or AutoOverpower() or AutoExecute() then return true end
-            if HUD.DeathWish == 1 and Target and Target.TTD >= 7 then if CoolDowns() then return true end end
-            if Setting("Pummel") then
-                for _, Unit in ipairs(EnemyMelee) do
-                    local castName = Unit:CastingInfo()
-                    if castName ~= nil and (HUD.Interrupts == 1 or interruptList[castName]) and Unit:Interrupt() then
-                        if smartCast("Pummel", Unit, true) then return true end
-                    end
-                end
-            end
-            if Target then
-                -- if Target.ValidEnemy then
-                    if Enemy8YC >= 2 and Setting("Whirlwind") and Player.Power >= 40 then
-                        if smartCast("Whirlwind", Player) then return true end
-                    end
-                    if Setting("MS/BT") and Player.Power >= 45 then
-                        if smartCast("Bloodthirst", Target) then return true end
-                    end
-                    if Spell.Slam:IsReady() and not Player.Moving and CastingInfo() == nil and Player.SwingMH <= 1 and Player.SwingMH > 0.5 and (SlamTime == nil or DMW.Time - SlamTime >= 1) then
-                        if not Target.Facing then FaceDirection(Target.Pointer, true) end
-                        print(DMW.Time)
-                        RunMacro("slam")
-                        SlamTime = DMW.Time
-                    end
-                -- end
-                if Player.Power >= 70 then
-                    if whatIsQueued == "NA" then
-                        if EnemyMeleeCount >= 2 then
-                            RunMacroText("/cast Cleave")
-                        else
-                            RunMacroText("/cast Heroic Strike")
-                        end
-                    end
-                end
-            end
-            bersOnTanking()
-        end -- combat
-        -----------------------------------------------------tanking----------------------------------------------------------------------
-    elseif Setting("Rotation") == 1 then
+    -----------------TANKING PART--------------------TANKING PART--------------------TANKING PART--------------------TANKING PART------
+    ---TANKING PART--------------------TANKING PART--------------------TANKING PART--------------------TANKING PART--------------------
+    -----------------TANKING PART--------------------TANKING PART--------------------TANKING PART--------------------TANKING PART------
+    if Setting("Rotation") == 1 then
         if Target and IsSpellInRange("Hamstring", "target") == 1 and Target.Attackable and not IsCurrentSpell(Spell.Attack.SpellID) then
             StartAttack()
         end
-
         if Player.Combat then
             -- EnemyMelee Threat Sorting
             for _, v in ipairs(Enemy30Y) do
@@ -991,6 +850,111 @@ function Warrior.Rotation()
             end
             bersOnTanking()
         end
+    -----------------FURY DW PART--------------------FURY DW PART--------------------FURY DW PART--------------------FURY DW PART------
+    ---FURY DW PART--------------------FURY DW PART--------------------FURY DW PART--------------------FURY DW PART--------------------
+    -----------------FURY DW PART--------------------FURY DW PART--------------------FURY DW PART--------------------FURY DW PART------
+    elseif Setting("Rotation") == 2 or (Target and Target.Player) then
+        if Target and not Target.Dead and Target.Distance <= 5 and Target.Attackable and not IsCurrentSpell(Spell.Attack.SpellID) then
+            StartAttack()
+        end
+        if Player.Combat and EnemyMeleeCount > 0 then
+            if AutoBuff() or AutoOverpower() or AutoExecute() then return true end
+            if HUD.DeathWish == 1 and Target and Target.TTD >= 7 then if CoolDowns() then return true end end
+            if Setting("Pummel") then
+                for _, Unit in ipairs(EnemyMelee) do
+                    local castName = Unit:CastingInfo()
+                    if castName ~= nil and (HUD.Interrupts == 1 or interruptList[castName]) and Unit:Interrupt() then
+                        if smartCast("Pummel", Unit, true) then return true end
+                    end
+                end
+            end
+            if Target then
+                if Enemy8YC >= 2 then
+                    if Setting("Whirlwind") then if smartCast("Whirlwind", Player, true) then return true end end
+
+                    -- if Setting("Cleave")  then
+                    --     if smartCast("Cleave", Player, true) then return true end
+                    -- end
+
+                        if Setting("MS/BT") and (Spell.Whirlwind:CD() >= 4 or Player.Power >= 45) then
+                            if smartCast("Bloodthirst", Target, true) then return true end
+                        end
+                else
+                    if Setting("SunderArmor ST") and Target.HP > Setting("SunderArmor ST") then
+                        -- if Setting("MS/BT") then if smartCast("Bloodthirst", Target, true) then return true end end
+                        if Debuff.SunderArmor:Stacks(Target) < 5 or Debuff.SunderArmor:Refresh(Target) then
+                            if smartCast("SunderArmor", Target, true) then return true end
+                        end
+                    end
+
+                        if Setting("MS/BT") then
+                            -- if Player.Power < 30 and not Buff.Flurry:Exist(Player) then
+                            --     if AutoOverpower() then return true end
+                            -- end
+                            if smartCast("Bloodthirst", Target, true) then return true end
+                        end
+                        if Setting("Whirlwind") and (Spell.Bloodthirst:CD() >= 4 or Player.Power >= 45) then
+                            if smartCast("Whirlwind", Player) then return true end
+                        end
+                    -- if AutoOverpower() then return true end
+                end
+                AbuseHS()
+                if Setting("Rage Dump1") and Player.Power >= Setting("Rage Dump") then
+                    if dumpRage(Player.Power - Setting("Rage Dump")) then return true end
+                end
+            end
+            bersOnTanking()
+        end -- combat
+    -----------------FURY SLAM PART--------------------FURY SLAM PART--------------------FURY SLAM PART--------------------FURY SLAM PART------
+    --FURY SLAM PART--------------------FURY SLAM PART--------------------FURY SLAM PART--------------------FURY SLAM PART---------------------
+    -----------------FURY SLAM PART--------------------FURY SLAM PART--------------------FURY SLAM PART--------------------FURY SLAM PART------
+    elseif Setting("Rotation") == 3 then
+        if Target and not Target.Dead and Target.Distance <= 5 and Target.Attackable and not IsCurrentSpell(Spell.Attack.SpellID) then
+            StartAttack()
+        end
+        if Player.Combat then
+            if AutoBuff() or AutoOverpower() or AutoExecute() then return true end
+            if HUD.DeathWish == 1 and Target and Target.TTD >= 7 then if CoolDowns() then return true end end
+            if Setting("Pummel") then
+                for _, Unit in ipairs(EnemyMelee) do
+                    local castName = Unit:CastingInfo()
+                    if castName ~= nil and (HUD.Interrupts == 1 or interruptList[castName]) and Unit:Interrupt() then
+                        if smartCast("Pummel", Unit, true) then return true end
+                    end
+                end
+            end
+            if Target then
+                -- if Target.ValidEnemy then
+                    if Enemy8YC >= 2 and Setting("Whirlwind") and Player.Power >= 40 then
+                        if smartCast("Whirlwind", Player) then return true end
+                    end
+                    if Setting("MS/BT") and Player.Power >= 45 then
+                        if smartCast("Bloodthirst", Target) then return true end
+                    end
+                    -- print(mainSpeed.."   ".. mainSwing)
+                    if Spell.Slam:IsReady() and not Player.Moving and CanSlam() then
+                        if not Target.Facing then FaceDirection(Target.Pointer, true) end
+                        -- print(DMW.Time)
+                        -- print(Player:GetSwing("main"))
+                        RunMacro("slam")
+                        -- RunMacroText("/cast slam")
+                    end
+                -- end
+                -- if Player.Power >= 70 then
+                --     if whatIsQueued == "NA" then
+                --         if EnemyMeleeCount >= 2 then
+                --             RunMacroText("/cast Cleave")
+                --         else
+                --             RunMacroText("/cast Heroic Strike")
+                --         end
+                --     end
+                -- end
+            end
+            bersOnTanking()
+        end -- combat
+    -----------------FURY PROT PART--------------------FURY PROT PART--------------------FURY PROT PART--------------------FURY PROT PART------
+    --FURY PROT PART--------------------FURY PROT PART--------------------FURY PROT PART--------------------FURY PROT PART---------------------
+    -----------------FURY PROT PART--------------------FURY PROT PART--------------------FURY PROT PART--------------------FURY SPROTLPROTAM PART------
     elseif Setting("Rotation") == 4 then
         if Target and IsSpellInRange("Hamstring", "target") == 1 and Target.Attackable and not IsCurrentSpell(Spell.Attack.SpellID) then
             StartAttack()
@@ -1098,8 +1062,25 @@ function Warrior.Rotation()
             if Setting("MS/BT") and Spell.Bloodthirst:Known() then
                 for k, Unit in ipairs(EnemyMelee) do if smartCast("Bloodthirst", Unit, true) then return true end end
             end
-            if Player.Power >= Setting("Rage Dump") then dumpRage(Player.Power - Setting("Rage Dump")) end
+            if Setting("Rage Dump1") and Player.Power >= Setting("Rage Dump") then
+                dumpRage(Player.Power - Setting("Rage Dump")) end
             bersOnTanking()
         end
+    elseif Setting("Rotation") == 5 then
+        if Target and not Target.Dead and Target.Distance <= 5 and Target.Attackable and not IsCurrentSpell(Spell.Attack.SpellID) then
+            StartAttack()
+        end
+        if Player.Combat then
+
+        end -- combat
+    -----------------FURY PVP PART--------------------FURY PVP PART--------------------FURY PVP PART--------------------FURY PVP PART------
+    --FURY PVP PART--------------------FURY PVP PART--------------------FURY PVP PART--------------------FURY PVP PART--------------------
+    -----------------FURY PVP PART--------------------FURY PVP PART--------------------FURY PVP PART--------------------FURY PVP PART------
+    elseif DMW.Player.Instance == "pvp" or (Target and Target.Player) then
+        if Target and not Target.Dead and Target.Distance <= 5 and Target.Attackable and not IsCurrentSpell(Spell.Attack.SpellID) then
+            StartAttack()
+        end
+
     end -- rotation setting
+
 end
