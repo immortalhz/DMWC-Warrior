@@ -1,9 +1,0 @@
-## Interface: 11320
-## Title: DoMeWhen Classic - Warrior
-## Author: Fisker
-## Notes: Warrior Rotation for DoMeWhen Classic
-## DefaultState: Disabled
-## Dependencies: DoMeWhen-Classic
-
-Settings.lua
-Rotation.lua

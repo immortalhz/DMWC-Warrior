@@ -1,0 +1,9 @@
+## Interface: 11320
+## Title: DoMeWhen Classic - Deathknight
+## Author: Fisker
+## Notes: Warrior Rotation for DoMeWhen Retail
+## DefaultState: Disabled
+## Dependencies: DoMeWhen-Retail
+
+Settings.lua
+Rotation.lua

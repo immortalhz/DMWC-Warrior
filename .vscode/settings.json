@@ -1,0 +1,15 @@
+{
+	"Lua.diagnostics.globals": [
+		"CreateFrame",
+		"lb",
+		"__LB__",
+		"GetKeyState",
+		"IsCurrentSpell",
+		"UnitAffectingCombat",
+		"StartAttack",
+		"DMW",
+		"UnitAffectingCombat",
+		"UnitAffectingCombat",
+		"DMWHUDSETUPCLEAVEMODE"
+	]
+}
